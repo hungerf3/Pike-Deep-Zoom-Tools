@@ -1,0 +1,8 @@
+Tilecutter is a tool for splitting a large source image
+into a Zoomify or Deep Zoom tileset.
+
+It was designed with a goal of having as few limits as to
+the maximum size of the image that could be processed,
+and is less flexable than other tools that are restricted
+to images which can be loaded into memory.
+
