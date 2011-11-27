@@ -34,6 +34,8 @@ string GenerateDeepZoomMetadata(int tile_size,
   return XMLRoot->render_xml();
 }
 
+/* Verify the metadata for a PNM file, and return the size */
+
 array(int) GetPNMSize(string aFile)
 {
   array(string) metadata = (Stdio.FILE(aFile)->read(2048)/"\n")[0..2];
@@ -44,12 +46,78 @@ array(int) GetPNMSize(string aFile)
 		   aFile));
 }
 
+
+/* Generate the temporary filename for a specific index */
+
 string GenerateTemporaryFilename(string workspace,
 				   int id)
 {
   return Stdio.simplify_path(sprintf("%s/%d.pnm",
 				      workspace,
 				      id));
+}
+
+/* Load a region from a PNM file */
+
+Image.Image LoadPNMRegion(string file,
+			  array(int) offset,
+			  array(int) size)
+{
+
+  // Generate a basic PNM header for a given region size.
+  string GeneratePNMMetadata(array(int) size)
+  {
+    return sprintf("P6\n%d %d\n255\n",
+		   size[0], size[1]);
+  };
+
+  int FindPNMHeaderEnd(string aFile)
+  {
+    string metadata = Stdio.FILE(aFile)->read(2048);
+    int offset=1;
+    for ( int x=0; x < 3; x++)
+      offset = search(metadata,"\n",offset)+1;
+    return offset;
+  };
+
+  array(string) imageSize = getPNMSize(file);
+
+  // Make local copies so we can modify them.
+  array(int) local_offset = copy_value(offset);
+  array(int) local_size = copy_value(size);
+
+  // Restrict the region size to the bounds of the image
+  array(int) margin = imageSize[*]-(local_offset[*]+local_size[*])[*];
+  foreach ( ({0, 1}), int index )
+    if (margin[index]<0)
+      local_size[index]+=margin[index];
+
+  lineStartOffset = local_offset[0];
+  lineEndOffset = imageSize[0]-(local_size[0]+local_offset[0]);
+
+  // Extract the image data from the massive PNM file.
+
+  string buffer = GeneratePNMMetadata(size);
+  Stdio.FILE input = Stdio.FILE(file);
+  // Skip the header
+  input->seek(FindPNMHeaderEnd(file));
+  // Seek to the beginning of the block
+  input->seek(input->tell()+ // Current position
+	      (local_offset[1]*imageSize[0])+ // Whole lines
+	      lineStartOffset); // Partial line
+  // Read the block
+  for (int x=0 ; x < local_size[1]; x++)
+    {
+      // Read the current line
+      buffer+=input->read(local_size[0]);
+      // Skip to the next line
+      input->seek(input->tell()+ // Current position
+		  lineEndOffset+ // end of the line
+		  lineStartOffset); // start of the next
+    }
+
+  // decode and return the image 
+  return Image.PNM.decode(buffer);
 }
 
 
@@ -63,11 +131,16 @@ string GenerateTemporaryFilename(string workspace,
 int PrepareScaledInputFiles(string source, string workspace, int limit)
 {
 
+
+  // pnmscalefixed can be used in place of pamscale for a ~30%
+  // speedup, with some minor quality loss, due to it not
+  // supporting the filter option.
   string command_template = "pamscale 0.5 -filter sinc < %s  > %s";
 
   int counter = 0;
+  // Link the initial input file as file 0
   System.symlink(source,
-		 GenerateTemporaryFilename(workspace,0));
+		 GenerateTemporaryFilename(workspace,counter));
   
   while (Array.all(GetPNMSize(GenerateTemporaryFilename(workspace,
 							counter)),
@@ -82,9 +155,49 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   return counter;
 }
 
+void CutDeepzoomTiles(string workspace,
+		      int levels,
+		      int quality,
+		      string output)
+{
+  mapping JPEG_OPTIONS = (["optimize":1,
+			   "quality":quality,
+			   "progressive":!]);
+    
+
+  for (int level = levels, level >=0 ; level --)
+    {
+      int step = levels-level;
+      string current_path = Stdio.simplify_path(sprintf("%s/%s",
+							workspace,
+							(string)step));
+      mkdir(current_path);
+      // Handle the simple case first. The entire level fits in one tile.
+      if (Array.all(GetPNMSize(GenerateTemporyFilename(workspace,
+						       level)),
+		    `<,
+		    257))
+	Stdio.FILE(current_path+"/0_0.jpg","wct")
+	  ->write(Image.JPEG.encode(Image.PNM.decode(Stdio.FILE(GenerateTemporaryFilename(workspace,
+											  level))),
+				    JPEG_OPTIONS));
+      else
+	{
+	  
+
+	}
+	
+    }
+
+}
+
+
+
 int main()
 {
-  PrepareScaledInputFiles("/Users/hungerf3/projects/zoom/pike/fs.pam",
-			  "/Users/hungerf3/projects/zoom/pike/test",
-			  1);
+  //  PrepareScaledInputFiles("/Users/hungerf3/skip/new/out/merged.pnm",
+  //			  "/Users/hungerf3/projects/zoom/pike/test",
+  //			  1);
+
+  
 }
