@@ -4,38 +4,37 @@
     
     This program takes a PNM format image, and splits it into a set
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
-
 */
 
 
 /* 
    Generate a basic set of XML data for a deep zoom image.
- */
+*/
 string GenerateDeepZoomMetadata(int tile_size,
-				int overlap,
-				string format,
-				int width,
-				int height)
+                                int overlap,
+                                string format,
+                                int width,
+                                int height)
 {
   object XMLRoot = Parser.XML.Tree.RootNode();
   XMLRoot->add_child(
-		     Parser.XML.Tree.Node(Parser.XML.Tree.XML_HEADER,
-					  "DOCTYPE",
-					  (["version":"1.0",
-					    "encoding":"utf-8"]),
-					  0));
+                     Parser.XML.Tree.Node(Parser.XML.Tree.XML_HEADER,
+                                          "DOCTYPE",
+                                          (["version":"1.0",
+                                            "encoding":"utf-8"]),
+                                          0));
   object ImageElement =  Parser.XML.Tree.Node(Parser.XML.Tree.XML_ELEMENT,
-					      "Image",
-					      (["Format":(string)format,
-						"Overlap":(string)overlap,
-						"Tilesize":(string)tile_size,
-						"xmlns":"http://schemas.microsoft.com/deepzoom/2008"]),
-					      0);
+                                              "Image",
+                                              (["Format":(string)format,
+                                                "Overlap":(string)overlap,
+                                                "Tilesize":(string)tile_size,
+                                                "xmlns":"http://schemas.microsoft.com/deepzoom/2008"]),
+                                              0);
   object SizeElement =  Parser.XML.Tree.Node(Parser.XML.Tree.XML_ELEMENT,
-					     "Size",
-					     (["Height":(string)height,
-					       "Width":(string)width]),
-					     0);
+                                             "Size",
+                                             (["Height":(string)height,
+                                               "Width":(string)width]),
+                                             0);
   ImageElement->add_child(SizeElement);
   XMLRoot->add_child(ImageElement);
   
@@ -50,30 +49,30 @@ array(int) GetPNMSize(string aFile)
     return (array(int))(metadata[1]/" ");
   else
     throw (sprintf("%s does not appear to be a PNM file",
-		   aFile));
+                   aFile));
 }
 
 
 /* Generate the temporary filename for a specific index */
-string GenerateTemporaryFilename(string workspace,
-				   int id)
+string GetTemporaryFilename(string workspace,
+                            int id)
 {
   return Stdio.simplify_path(sprintf("%s/%d.pnm",
-				      workspace,
-				      id));
+                                     workspace,
+                                     id));
 }
 
 /* Load a region from a PNM file */
 Image.Image LoadPNMRegion(string file,
-			  array(int) offset,
-			  array(int) size)
+                          array(int) offset,
+                          array(int) size)
 {
 
   // Generate a basic PNM header for a given region size.
   string GeneratePNMMetadata(array(int) size)
   {
     return sprintf("P6\n%d %d\n255\n",
-		   size[0], size[1]);
+                   size[0], size[1]);
   };
 
   int FindPNMHeaderEnd(string aFile)
@@ -95,13 +94,15 @@ Image.Image LoadPNMRegion(string file,
   array(int) margin = imageSize[*]-(local_offset[*]+local_size[*])[*];
   foreach ( ({0, 1}), int index )
     if (margin[index]<0)
-      local_size[index]+=margin[index];
+      local_size[index] = imageSize[index] - local_offset[index];
 
   int lineStartOffset = local_offset[0];
   int lineEndOffset = imageSize[0]-(local_size[0]+local_offset[0]);
 
   // Extract the image data from the massive PNM file.
-  string buffer = GeneratePNMMetadata(size);
+  String.Buffer buffer = String.Buffer();
+  
+  buffer->add(GeneratePNMMetadata(local_size));
   Stdio.FILE input = Stdio.FILE(file);
 
   // Skip the header
@@ -109,21 +110,22 @@ Image.Image LoadPNMRegion(string file,
 
   // Seek to the beginning of the block
   input->seek(input->tell()+ // Current position
-	      (local_offset[1]*imageSize[0])+ // Whole lines
-	      lineStartOffset); // Partial line
+              3*(local_offset[1]*imageSize[0])+ // Whole lines
+              3*lineStartOffset); // Partial line
+
   // Read the block
   for (int x=0 ; x < local_size[1]; x++)
     {
       // Read the current line
-      buffer+=input->read(local_size[0]);
+      buffer->add(input->read(3*local_size[0]));
       // Skip to the next line
       input->seek(input->tell()+ // Current position
-		  lineEndOffset+ // end of the line
-		  lineStartOffset); // start of the next
+                  3*lineEndOffset+ // end of the line
+                  3*lineStartOffset); // start of the next
     }
 
   // decode and return the image 
-  return Image.PNM.decode(buffer);
+  return Image.PNM.decode(buffer->get());
 }
 
 
@@ -138,7 +140,7 @@ Image.Image LoadPNMRegion(string file,
    Zoomify format tiles stop the pyramid when it falls under
    the size of a single tile, but Deep Zoom format tilesets
    want to continue all the way down to a single pixel tile.
- */
+*/
 int PrepareScaledInputFiles(string source, string workspace, int limit)
 {
   // pnmscalefixed can be used in place of pamscale for a ~30%
@@ -147,69 +149,95 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   string command_template = "pamscale 0.5 -filter sinc < %s  > %s";
 
   int counter = 0;
+
   // Link the initial input file as file 0
   System.symlink(source,
-		 GenerateTemporaryFilename(workspace,counter));
+                 GetTemporaryFilename(workspace,counter));
   
-  while (Array.all(GetPNMSize(GenerateTemporaryFilename(workspace,
-							counter)),
-		   `>,
-		   limit))
+  // Create new images until we are under the limit
+  while (Array.all(GetPNMSize(GetTemporaryFilename(workspace,
+                                                   counter)),
+                   `>,
+                   limit))
     Process.spawn(sprintf(command_template,
-			   GenerateTemporaryFilename(workspace,
-						     counter),
-			   GenerateTemporaryFilename(workspace,
-						     ++counter)))
+                          GetTemporaryFilename(workspace,
+                                               counter),
+                          GetTemporaryFilename(workspace,
+                                               ++counter)))
       ->wait();
   return counter;
 }
 
-void CutDeepzoomTiles(string workspace,
-		      int levels,
-		      int quality,
-		      string output)
+/* Cut tiles for a DeepZoom tileset. */
+void CutDeepZoomTiles(string workspace,
+                      int levels,
+                      int quality,
+                      string output)
 {
   mapping JPEG_OPTIONS = (["optimize":1,
-			   "quality":quality,
-			   "progressive":1]);
+                           "quality":quality,
+                           "progressive":1]);
     
 
   for (int level = levels; level >=0 ; level --)
     {
       int step = levels-level;
       string current_path = Stdio.simplify_path(sprintf("%s/%s",
-							workspace,
-							(string)step));
+                                                        output,
+                                                        (string)step));
       mkdir(current_path);
-      // Handle the simple case first. The entire level fits in one tile.
-      if (Array.all(GetPNMSize(GenerateTemporaryFilename(workspace,
-						       level)),
-		    `<,
-		    257))
-	Stdio.FILE(current_path+"/0_0.jpg","wct")
-	  ->write(Image.JPEG.encode(Image.PNM.decode(Stdio.FILE(GenerateTemporaryFilename(workspace,
-											  level))
-						     ->read()),
-				    JPEG_OPTIONS));
-      else
-	{
-	  array(int) imageSize = GetPNMSize(GenerateTemporaryFilename(workspace,
-								      level));
-	  
-
-	}
-	
+      
+      array(int) imageSize = GetPNMSize(GetTemporaryFilename(workspace,
+							     level));
+      array(int) tiles = (array(int))(ceil((imageSize[*]/256.0)[*]));
+      for (int x = 0 ; x < tiles[0] ; x++)
+	for (int y = 0 ; y < tiles[1] ; y++)
+	  Stdio.FILE(sprintf("%s/%d_%d.jpg",
+			     current_path,
+			     x, y),
+		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(GetTemporaryFilename(workspace,
+											level),
+								   ({256*x, 256*y}),
+								   ({256,256})),
+						     JPEG_OPTIONS));
+      // Clean up the tile data
     }
-
 }
 
+
+void DeepZoom(string output,
+	      string name,
+	      string workspace,
+	      string input,
+	      int quality)
+{
+
+  string tileDir = sprintf("%s/%s_files",output,name);
+  mkdir(tileDir);
+
+  array(int) imageSize = GetPNMSize(sprintf("%s/0.pnm",workspace));
+
+  Stdio.FILE(sprintf("%s/%s.dzi",
+		     output,
+		     name),
+	     "wct")
+    ->write(GenerateDeepZoomMetadata(256,0,"jpg",
+				     imageSize[0],
+				     imageSize[1]));
+  CutDeepZoomTiles("/Users/hungerf3/projects/zoom/pike/test",
+		   15,
+		   quality,
+		   tileDir);
+}
 
 
 int main()
 {
   //  PrepareScaledInputFiles("/Users/hungerf3/skip/new/out/merged.pnm",
-  //			  "/Users/hungerf3/projects/zoom/pike/test",
-  //			  1);
+  //                      "/Users/hungerf3/projects/zoom/pike/test",
+  //                      1);
 
-  
+  DeepZoom("/Users/hungerf3/projects/zoom/pike/output",
+	   "test", "/Users/hungerf3/projects/zoom/pike/test",
+	   "unused", 65);
 }
