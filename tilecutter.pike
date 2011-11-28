@@ -1,7 +1,15 @@
 #! /usr/local/bin/pike
+/*  Tilecutter.pike
+    Copyright 2011 by Jeff Hungerford <hungerf3@house.ofdoom.com>
+    
+    This program takes a PNM format image, and splits it into a set
+    of tiles usable with "deep zoom" based viewers, such as Seadragon.
+
+*/
+
 
 /* 
-   Generate a basic set of XML data for a deep zoom image
+   Generate a basic set of XML data for a deep zoom image.
  */
 string GenerateDeepZoomMetadata(int tile_size,
 				int overlap,
@@ -35,7 +43,6 @@ string GenerateDeepZoomMetadata(int tile_size,
 }
 
 /* Verify the metadata for a PNM file, and return the size */
-
 array(int) GetPNMSize(string aFile)
 {
   array(string) metadata = (Stdio.FILE(aFile)->read(2048)/"\n")[0..2];
@@ -48,7 +55,6 @@ array(int) GetPNMSize(string aFile)
 
 
 /* Generate the temporary filename for a specific index */
-
 string GenerateTemporaryFilename(string workspace,
 				   int id)
 {
@@ -58,7 +64,6 @@ string GenerateTemporaryFilename(string workspace,
 }
 
 /* Load a region from a PNM file */
-
 Image.Image LoadPNMRegion(string file,
 			  array(int) offset,
 			  array(int) size)
@@ -80,7 +85,7 @@ Image.Image LoadPNMRegion(string file,
     return offset;
   };
 
-  array(string) imageSize = getPNMSize(file);
+  array(int) imageSize = GetPNMSize(file);
 
   // Make local copies so we can modify them.
   array(int) local_offset = copy_value(offset);
@@ -92,15 +97,16 @@ Image.Image LoadPNMRegion(string file,
     if (margin[index]<0)
       local_size[index]+=margin[index];
 
-  lineStartOffset = local_offset[0];
-  lineEndOffset = imageSize[0]-(local_size[0]+local_offset[0]);
+  int lineStartOffset = local_offset[0];
+  int lineEndOffset = imageSize[0]-(local_size[0]+local_offset[0]);
 
   // Extract the image data from the massive PNM file.
-
   string buffer = GeneratePNMMetadata(size);
   Stdio.FILE input = Stdio.FILE(file);
+
   // Skip the header
   input->seek(FindPNMHeaderEnd(file));
+
   // Seek to the beginning of the block
   input->seek(input->tell()+ // Current position
 	      (local_offset[1]*imageSize[0])+ // Whole lines
@@ -122,16 +128,19 @@ Image.Image LoadPNMRegion(string file,
 
 
 
-/* Scales the input files for the image pyramid.
+/* Scale the input files for the image pyramid.
    Returns the number of layers created.
 
    Files are created in workspace, from the pnm source file
    in source.
+
+   Limit is the size at which to stop producing the image pyramid.
+   Zoomify format tiles stop the pyramid when it falls under
+   the size of a single tile, but Deep Zoom format tilesets
+   want to continue all the way down to a single pixel tile.
  */
 int PrepareScaledInputFiles(string source, string workspace, int limit)
 {
-
-
   // pnmscalefixed can be used in place of pamscale for a ~30%
   // speedup, with some minor quality loss, due to it not
   // supporting the filter option.
@@ -162,10 +171,10 @@ void CutDeepzoomTiles(string workspace,
 {
   mapping JPEG_OPTIONS = (["optimize":1,
 			   "quality":quality,
-			   "progressive":!]);
+			   "progressive":1]);
     
 
-  for (int level = levels, level >=0 ; level --)
+  for (int level = levels; level >=0 ; level --)
     {
       int step = levels-level;
       string current_path = Stdio.simplify_path(sprintf("%s/%s",
@@ -173,16 +182,19 @@ void CutDeepzoomTiles(string workspace,
 							(string)step));
       mkdir(current_path);
       // Handle the simple case first. The entire level fits in one tile.
-      if (Array.all(GetPNMSize(GenerateTemporyFilename(workspace,
+      if (Array.all(GetPNMSize(GenerateTemporaryFilename(workspace,
 						       level)),
 		    `<,
 		    257))
 	Stdio.FILE(current_path+"/0_0.jpg","wct")
 	  ->write(Image.JPEG.encode(Image.PNM.decode(Stdio.FILE(GenerateTemporaryFilename(workspace,
-											  level))),
+											  level))
+						     ->read()),
 				    JPEG_OPTIONS));
       else
 	{
+	  array(int) imageSize = GetPNMSize(GenerateTemporaryFilename(workspace,
+								      level));
 	  
 
 	}
