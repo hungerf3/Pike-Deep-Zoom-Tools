@@ -10,6 +10,9 @@
 /* 
    Generate a basic set of XML data for a deep zoom image.
 */
+
+string TEMP_DIR = "";
+
 string GenerateDeepZoomMetadata(int tile_size,
                                 int overlap,
                                 string format,
@@ -44,7 +47,7 @@ string GenerateDeepZoomMetadata(int tile_size,
 /* Verify the metadata for a PNM file, and return the size */
 array(int) GetPNMSize(string aFile)
 {
-  array(string) metadata = (Stdio.FILE(aFile)->read(2048)/"\n")[0..2];
+  array(string) metadata = (Stdio.File(aFile)->read(2048)/"\n")[0..2];
   if (metadata[0]=="P6")
     return (array(int))(metadata[1]/" ");
   else
@@ -77,7 +80,7 @@ Image.Image LoadPNMRegion(string file,
 
   int FindPNMHeaderEnd(string aFile)
   {
-    string metadata = Stdio.FILE(aFile)->read(2048);
+    string metadata = Stdio.File(aFile)->read(2048);
     int offset=1;
     for ( int x=0; x < 3; x++)
       offset = search(metadata,"\n",offset)+1;
@@ -103,7 +106,8 @@ Image.Image LoadPNMRegion(string file,
   String.Buffer buffer = String.Buffer();
   
   buffer->add(GeneratePNMMetadata(local_size));
-  Stdio.FILE input = Stdio.FILE(file);
+  // Use an unbuffered file.
+  Stdio.File input = Stdio.File(file);
 
   // Skip the header
   input->seek(FindPNMHeaderEnd(file));
@@ -192,7 +196,7 @@ void CutDeepZoomTiles(string workspace,
       array(int) tiles = (array(int))(ceil((imageSize[*]/256.0)[*]));
       for (int x = 0 ; x < tiles[0] ; x++)
 	for (int y = 0 ; y < tiles[1] ; y++)
-	  Stdio.FILE(sprintf("%s/%d_%d.jpg",
+	  Stdio.File(sprintf("%s/%d_%d.jpg",
 			     current_path,
 			     x, y),
 		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(GetTemporaryFilename(workspace,
@@ -201,6 +205,7 @@ void CutDeepZoomTiles(string workspace,
 								   ({256,256})),
 						     JPEG_OPTIONS));
       // Clean up the tile data
+      rm (GetTemporaryFilename(workspace,level));
     }
 }
 
@@ -208,7 +213,7 @@ void CutDeepZoomTiles(string workspace,
 void DeepZoom(string output,
 	      string name,
 	      string workspace,
-	      string input,
+	      int levels,
 	      int quality)
 {
 
@@ -217,7 +222,7 @@ void DeepZoom(string output,
 
   array(int) imageSize = GetPNMSize(sprintf("%s/0.pnm",workspace));
 
-  Stdio.FILE(sprintf("%s/%s.dzi",
+  Stdio.File(sprintf("%s/%s.dzi",
 		     output,
 		     name),
 	     "wct")
@@ -225,19 +230,37 @@ void DeepZoom(string output,
 				     imageSize[0],
 				     imageSize[1]));
   CutDeepZoomTiles("/Users/hungerf3/projects/zoom/pike/test",
-		   15,
+		   levels,
 		   quality,
 		   tileDir);
 }
 
 
-int main()
+int main(int argc, array(string) argv)
 {
-  //  PrepareScaledInputFiles("/Users/hungerf3/skip/new/out/merged.pnm",
-  //                      "/Users/hungerf3/projects/zoom/pike/test",
-  //                      1);
+  
+  if (getenv("TMP"))
+    TEMP_DIR = getenv("TMP");
+  else
+    TEMP_DIR = "/var/tmp/";
 
-  DeepZoom("/Users/hungerf3/projects/zoom/pike/output",
-	   "test", "/Users/hungerf3/projects/zoom/pike/test",
-	   "unused", 65);
+  TEMP_DIR = Stdio.simplify_path(sprintf("%s/%s",
+					 TEMP_DIR,
+					 MIME.encode_base64(Crypto.Random.random_string(10))));
+
+  if (argc !=4)
+    {
+      Stdio.stdout.write("Usage: tilecutter.pike <input> <outputdir> <outputname>\n");
+    }
+  else
+    {
+      mkdir(TEMP_DIR);
+      DeepZoom(argv[2],
+	       argv[3], TEMP_DIR,
+	       PrepareScaledInputFiles(argv[1],
+				       TEMP_DIR,
+				       1),
+	       65);
+      rm(TEMP_DIR);
+    }
 }
