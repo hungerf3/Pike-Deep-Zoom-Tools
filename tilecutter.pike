@@ -30,7 +30,7 @@ string GenerateDeepZoomMetadata(int tile_size,
                                               "Image",
                                               (["Format":(string)format,
                                                 "Overlap":(string)overlap,
-                                                "Tilesize":(string)tile_size,
+                                                "TileSize":(string)tile_size,
                                                 "xmlns":"http://schemas.microsoft.com/deepzoom/2008"]),
                                               0);
   object SizeElement =  Parser.XML.Tree.Node(Parser.XML.Tree.XML_ELEMENT,
@@ -41,7 +41,7 @@ string GenerateDeepZoomMetadata(int tile_size,
   ImageElement->add_child(SizeElement);
   XMLRoot->add_child(ImageElement);
   
-  return XMLRoot->render_xml();
+  return (XMLRoot->render_xml())+"\n"; // Seadragon needs a blank line after the XML;
 }
 
 /* Verify the metadata for a PNM file, and return the size */
@@ -159,7 +159,7 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
                  GetTemporaryFilename(workspace,counter));
   
   // Create new images until we are under the limit
-  while (Array.all(GetPNMSize(GetTemporaryFilename(workspace,
+  while (Array.any(GetPNMSize(GetTemporaryFilename(workspace,
                                                    counter)),
                    `>,
                    limit))
@@ -176,7 +176,8 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
 void CutDeepZoomTiles(string workspace,
                       int levels,
                       int quality,
-                      string output)
+                      string output,
+		      int tilesize)
 {
   mapping JPEG_OPTIONS = (["optimize":1,
                            "quality":quality,
@@ -193,7 +194,7 @@ void CutDeepZoomTiles(string workspace,
       
       array(int) imageSize = GetPNMSize(GetTemporaryFilename(workspace,
 							     level));
-      array(int) tiles = (array(int))(ceil((imageSize[*]/256.0)[*]));
+      array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tilesize))[*]));
       for (int x = 0 ; x < tiles[0] ; x++)
 	for (int y = 0 ; y < tiles[1] ; y++)
 	  Stdio.File(sprintf("%s/%d_%d.jpg",
@@ -201,8 +202,8 @@ void CutDeepZoomTiles(string workspace,
 			     x, y),
 		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(GetTemporaryFilename(workspace,
 											level),
-								   ({256*x, 256*y}),
-								   ({256,256})),
+								   ({tilesize*x, tilesize*y}),
+								   ({tilesize,tilesize})),
 						     JPEG_OPTIONS));
       // Clean up the tile data
       rm (GetTemporaryFilename(workspace,level));
@@ -229,10 +230,11 @@ void DeepZoom(string output,
     ->write(GenerateDeepZoomMetadata(256,0,"jpg",
 				     imageSize[0],
 				     imageSize[1]));
-  CutDeepZoomTiles("/Users/hungerf3/projects/zoom/pike/test",
+  CutDeepZoomTiles(workspace,
 		   levels,
 		   quality,
-		   tileDir);
+		   tileDir,
+		   256);
 }
 
 
