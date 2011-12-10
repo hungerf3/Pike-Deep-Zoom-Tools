@@ -11,7 +11,24 @@
 // Path to a temporary workspace
 string TEMP_DIR = "";
 
+// Defaults for command line flags
 
+mapping DEFAULTS = ([
+  "format":"jpeg",
+  "help":"False",
+  "quality":"60",
+  "type":"DeepZoom",
+  "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp"
+]);
+
+// Documentation for command line flags
+mapping FLAG_HELP = ([
+  "format": "Format to use for output tiles",
+  "quality":"Quality to use for Jpeg encoding",
+  "type":"Type of tile data to produce. DeepZoom or Zoomify",
+  "workspace":"Directory to use for temporary files",
+  "help":"Display runtime help"
+]);
 /* 
    Generate a basic set of XML data for a seadragon deep zoom image.
 
@@ -269,32 +286,36 @@ void DeepZoom(string output,
 		   256);
 }
 
+void help()
+{
+  Stdio.stdout.write("Usage: tilecutter.pike [flags] <input> <outputdir> <outputname>\n");
+  foreach(indices(FLAG_HELP), string aFlag)
+    {
+      Stdio.stdout.write(sprintf("--%s: %s (Default: %s)\n",
+				 aFlag,
+				 FLAG_HELP[aFlag],
+				 DEFAULTS[aFlag]));
+    }
+}
 
 int main(int argc, array(string) argv)
 {
   
-  if (getenv("TMP"))
-    TEMP_DIR = getenv("TMP");
-  else
-    TEMP_DIR = "/var/tmp/";
-
+  mapping FLAGS = DEFAULTS|Arg.parse(argv);
+  if ( FLAGS["help"]==1 | sizeof(FLAGS[Arg.REST])!=4)
+    {
+      help();
+      exit(1);
+    }
   TEMP_DIR = Stdio.simplify_path(sprintf("%s/%s",
 					 TEMP_DIR,
 					 MIME.encode_base64(Crypto.Random.random_string(10))));
-
-  if (argc !=4)
-    {
-      Stdio.stdout.write("Usage: tilecutter.pike <input> <outputdir> <outputname>\n");
-    }
-  else
-    {
-      mkdir(TEMP_DIR);
-      DeepZoom(argv[2],
-	       argv[3], TEMP_DIR,
-	       PrepareScaledInputFiles(argv[1],
-				       TEMP_DIR,
-				       1),
-	       65);
-      rm(TEMP_DIR);
-    }
+  mkdir(TEMP_DIR);
+  DeepZoom(FLAGS[Arg.REST][1],
+	   FLAGS[Arg.REST][2], TEMP_DIR,
+	   PrepareScaledInputFiles(FLAGS[Arg.REST][0],
+				   TEMP_DIR,
+				   1),
+	   (int)FLAGS["quality"]);
+  rm(TEMP_DIR);
 }
