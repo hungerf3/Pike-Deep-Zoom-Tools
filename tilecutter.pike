@@ -6,12 +6,22 @@
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
 */
 
+// Global Variables:
+
+// Path to a temporary workspace
+string TEMP_DIR = "";
+
 
 /* 
-   Generate a basic set of XML data for a deep zoom image.
+   Generate a basic set of XML data for a seadragon deep zoom image.
+
+   tile_size: Number of pixels on one side of a square tile
+   overlap: Number of pixels by which tiles overlap
+   format: Encoding format used for the tiles
+   width: Width of the entire image
+   height: Height of the entire image
 */
 
-string TEMP_DIR = "";
 
 string GenerateDeepZoomMetadata(int tile_size,
                                 int overlap,
@@ -65,19 +75,26 @@ string GetTemporaryFilename(string workspace,
                                      id));
 }
 
-/* Load a region from a PNM file */
+/* Load a region from a PNM file
+   
+   file: the PNM file from which to load the region
+   offset: An array of int holding the starting offset in pixels
+   size: An array of int holding the size to load
+ */
 Image.Image LoadPNMRegion(string file,
                           array(int) offset,
                           array(int) size)
 {
 
   // Generate a basic PNM header for a given region size.
+  // Used to decode a block of PNM data.
   string GeneratePNMMetadata(array(int) size)
   {
     return sprintf("P6\n%d %d\n255\n",
                    size[0], size[1]);
   };
 
+  // Find the end of the header data in a PNM file
   int FindPNMHeaderEnd(string aFile)
   {
     string metadata = Stdio.File(aFile)->read(2048);
@@ -133,7 +150,6 @@ Image.Image LoadPNMRegion(string file,
 }
 
 
-
 /* Scale the input files for the image pyramid.
    Returns the number of layers created.
 
@@ -172,7 +188,14 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   return counter;
 }
 
-/* Cut tiles for a DeepZoom tileset. */
+/* Cut tiles for a DeepZoom tileset.
+
+   workspace: Path to a temporary workspace
+   levels: number of levels in the image pyramid
+   quality: JPEG quality level for output tiles
+   output: Path to which output is written
+   tilesize: Size of one side of the square tiles
+*/
 void CutDeepZoomTiles(string workspace,
                       int levels,
                       int quality,
@@ -211,6 +234,15 @@ void CutDeepZoomTiles(string workspace,
 }
 
 
+/*
+  Generate a Seadragon deep zoom dataset (tiles and XML data)
+
+  output: path at which the output is written
+  name: name of the image
+  workspace: path used as a temporary workspace
+  levels: number of levels in the image pyramid
+  quality: JPEG encoding quality for output tiles
+ */
 void DeepZoom(string output,
 	      string name,
 	      string workspace,
