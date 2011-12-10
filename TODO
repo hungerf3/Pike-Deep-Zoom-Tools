@@ -1,0 +1,4 @@
+* Add Zoomify Tile cutting
+* Add OpenZoom metadata generation
+* Add internal scaling
+* Add option for creating packed output
