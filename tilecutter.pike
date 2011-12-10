@@ -12,7 +12,6 @@
 string TEMP_DIR = "";
 
 // Defaults for command line flags
-
 mapping DEFAULTS = ([
   "format":"jpeg",
   "help":"False",
@@ -20,7 +19,6 @@ mapping DEFAULTS = ([
   "type":"DeepZoom",
   "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp"
 ]);
-
 
 // Acceptable values for command line flags
 mapping ACCEPTABLE_VALUES =([
@@ -35,8 +33,26 @@ mapping FLAG_HELP = ([
   "workspace":"Directory to use for temporary files",
   "help":"Display runtime help"
 ]);
+
+
+/*
+  Generate the XML data for a zoomify image
+
+*/
+string GenerateZoomifyMetadata(int tile_size,
+			       int width,
+			       int height,
+			       int count)
+{
+  return sprintf("<IMAGE_PROPERTIES WIDTH=\"%d\" HEIGHT=\"%d\" NUMTILES=\"%d\" NUMIMAGES=\"1\" VERSION=\"1.8\" TILESIZE=\"%d\" />",
+		 width,
+		 height,
+		 count,
+		 tile_size);
+}
+
 /* 
-   Generate a basic set of XML data for a seadragon deep zoom image.
+   Generate theXML data for a seadragon deep zoom image.
 
    tile_size: Number of pixels on one side of a square tile
    overlap: Number of pixels by which tiles overlap
@@ -44,8 +60,6 @@ mapping FLAG_HELP = ([
    width: Width of the entire image
    height: Height of the entire image
 */
-
-
 string GenerateDeepZoomMetadata(int tile_size,
                                 int overlap,
                                 string format,
@@ -77,6 +91,7 @@ string GenerateDeepZoomMetadata(int tile_size,
   return (XMLRoot->render_xml())+"\n"; // Seadragon needs a blank line after the XML;
 }
 
+
 /* Verify the metadata for a PNM file, and return the size */
 array(int) GetPNMSize(string aFile)
 {
@@ -97,6 +112,7 @@ string GetTemporaryFilename(string workspace,
                                      workspace,
                                      id));
 }
+
 
 /* Load a region from a PNM file
    
@@ -211,19 +227,87 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   return counter;
 }
 
+
+/* Cut tiles for a Zoomify tileset.
+
+   Returns the count of cut tiles.
+
+   workspace: Path to a temporary workspace
+   levels: number of levels in the image pyramid
+   quality: JPEG quality level for output tiles
+   output: Path to which output is written
+   tileSize: Size of one side of the square tiles
+*/
+int CutZoomifyTiles(string workspace,
+		    int levels,
+		    int quality,
+		    string output,
+		    int tileSize)
+{
+  int count = 0;    // Total tiles cut
+  int group = -1;    // Current tile group
+  int inGroup = 0;  // Tiles in current group
+  string currentPath; // Current working path.
+  mapping JPEG_OPTIONS = (["optimize":1,
+                           "quality":quality,
+                           "progressive":1]);
+
+  void UpdateCurrentPath()
+  {
+    group++;
+    inGroup=0;
+    currentPath = Stdio.simplify_path(sprintf("%s/TileGroup%d",
+					      output,group));
+    mkdir(currentPath);
+  };
+
+  mkdir(output);
+  UpdateCurrentPath();
+  for (int level = levels; level >=0 ; level --)
+    {
+      string currentFile = GetTemporaryFilename(workspace,level);
+      array(int) imageSize = GetPNMSize(currentFile);
+      array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
+      for (int x = 0 ; x < tiles[0] ; x++)
+	for (int y = 0 ; y < tiles[1] ; y++)
+	  {
+	    if (inGroup >255) // Start a new group every 255 tiles
+	      {
+		UpdateCurrentPath();
+		mkdir(currentPath);
+	      }
+	    Stdio.File(sprintf("%s/%d-%d-%d.jpg",
+			       currentPath,
+			       levels-level,
+			       x,
+			       y),
+		       "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
+								     ({tileSize*x,tileSize*y}),
+								     ({tileSize,tileSize})),
+						       JPEG_OPTIONS));
+	    inGroup++;
+	    count++;
+	  }
+      // Clean up the tile data
+      rm(currentFile);
+    }
+  return count;
+}
+
+
 /* Cut tiles for a DeepZoom tileset.
 
    workspace: Path to a temporary workspace
    levels: number of levels in the image pyramid
    quality: JPEG quality level for output tiles
    output: Path to which output is written
-   tilesize: Size of one side of the square tiles
+   tileSize: Size of one side of the square tiles
 */
 void CutDeepZoomTiles(string workspace,
                       int levels,
                       int quality,
                       string output,
-		      int tilesize)
+		      int tileSize)
 {
   mapping JPEG_OPTIONS = (["optimize":1,
                            "quality":quality,
@@ -233,26 +317,26 @@ void CutDeepZoomTiles(string workspace,
   for (int level = levels; level >=0 ; level --)
     {
       int step = levels-level;
-      string current_path = Stdio.simplify_path(sprintf("%s/%s",
+      string currentFile = GetTemporaryFilename(workspace,
+						level);
+      string currentPath = Stdio.simplify_path(sprintf("%s/%s",
                                                         output,
                                                         (string)step));
-      mkdir(current_path);
+      mkdir(currentPath);
       
-      array(int) imageSize = GetPNMSize(GetTemporaryFilename(workspace,
-							     level));
-      array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tilesize))[*]));
+      array(int) imageSize = GetPNMSize(currentFile);
+      array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
       for (int x = 0 ; x < tiles[0] ; x++)
 	for (int y = 0 ; y < tiles[1] ; y++)
 	  Stdio.File(sprintf("%s/%d_%d.jpg",
-			     current_path,
+			     currentPath,
 			     x, y),
-		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(GetTemporaryFilename(workspace,
-											level),
-								   ({tilesize*x, tilesize*y}),
-								   ({tilesize,tilesize})),
+		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
+								   ({tileSize*x, tileSize*y}),
+								   ({tileSize,tileSize})),
 						     JPEG_OPTIONS));
       // Clean up the tile data
-      rm (GetTemporaryFilename(workspace,level));
+      rm (currentFile);
     }
 }
 
@@ -293,6 +377,41 @@ void DeepZoom(string output,
 }
 
 
+/* Generate a zoomify dataset
+
+   output: path at which the output is written
+   name:  name of the image
+   workspace: path used as a temporary workspace
+   levels: number of levels in the image pyramid
+   quality: JPEG encoding quality for output tiles
+*/
+void Zoomify(string output,
+	     string name,
+	     string workspace,
+	     int levels,
+	     int quality)
+{
+
+  string tileDir = sprintf("%s/%s",output,name);
+  mkdir(tileDir);
+
+  array(int) imageSize = GetPNMSize(sprintf("%s/0.pnm",workspace));
+
+  Stdio.File(sprintf("%s/ImageProperties.xml",
+		     tileDir),
+	     "wct")
+    ->write(GenerateZoomifyMetadata(256,
+				    imageSize[0],
+				    imageSize[1],
+				    CutZoomifyTiles(workspace,
+						    levels,
+						    quality,
+						    tileDir,
+						    256)));
+						    
+}
+
+
 // check command lime flags
 void check_flags(mapping FLAGS)
 {
@@ -306,8 +425,8 @@ void check_flags(mapping FLAGS)
 	}
 }
 
-/* Display help 
- */
+
+// Display help 
 void help()
 {
   Stdio.stdout.write("Usage: tilecutter.pike [flags] <input> <outputdir> <outputname>\n");
@@ -320,6 +439,8 @@ void help()
     }
 }
 
+
+// Main
 int main(int argc, array(string) argv)
 {
   
@@ -330,15 +451,29 @@ int main(int argc, array(string) argv)
       help();
       exit(1);
     }
+
+  string INPUT = FLAGS[Arg.REST][0];
+  string OUTPUT = FLAGS[Arg.REST][1];
+  string NAME = FLAGS[Arg.REST][2];
   TEMP_DIR = Stdio.simplify_path(sprintf("%s/%s",
 					 TEMP_DIR,
 					 MIME.encode_base64(Crypto.Random.random_string(10))));
   mkdir(TEMP_DIR);
-  DeepZoom(FLAGS[Arg.REST][1],
-	   FLAGS[Arg.REST][2], TEMP_DIR,
-	   PrepareScaledInputFiles(FLAGS[Arg.REST][0],
-				   TEMP_DIR,
-				   1),
-	   (int)FLAGS["quality"]);
+
+  if (FLAGS["type"]=="DeepZoom")
+    DeepZoom(OUTPUT,
+	     NAME, TEMP_DIR,
+	     PrepareScaledInputFiles(INPUT,
+				     TEMP_DIR,
+				     1),
+	     (int)FLAGS["quality"]);
+  else
+    if (FLAGS["type"]=="Zoomify")
+      Zoomify(OUTPUT,
+	      NAME, TEMP_DIR,
+	      PrepareScaledInputFiles(INPUT,
+				      TEMP_DIR,
+				      256),
+	      (int)FLAGS["quality"]);
   rm(TEMP_DIR);
 }
