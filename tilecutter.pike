@@ -6,10 +6,8 @@
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
 */
 
-// Global Variables:
-
 // Defaults for command line flags
-mapping DEFAULTS = ([
+mapping FLAG_DEFAULTS = ([
   "format":"jpeg",
   "help":"False",
   "quality":"60",
@@ -18,7 +16,7 @@ mapping DEFAULTS = ([
 ]);
 
 // Acceptable values for command line flags
-mapping ACCEPTABLE_VALUES =([
+mapping FLAG_ACCEPTABLE_VALUES =([
   "type":(<"DeepZoom","Zoomify">),
   "format":(<"jpeg">)
 ]);
@@ -203,7 +201,6 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   // speedup, with some minor quality loss, due to it not
   // supporting the filter option.
   string command_template = "pamscale 0.5 -filter sinc < %s  > %s";
-
   int counter = 0;
 
   // Link the initial input file as file 0
@@ -409,8 +406,8 @@ void Zoomify(string output,
 void check_flags(mapping FLAGS)
 {
   foreach(indices(FLAGS), mixed aFlag)
-    if (has_index(ACCEPTABLE_VALUES,aFlag))
-      if (!ACCEPTABLE_VALUES[aFlag][FLAGS[aFlag]])
+    if (has_index(FLAG_ACCEPTABLE_VALUES,aFlag))
+      if (!FLAG_ACCEPTABLE_VALUES[aFlag][FLAGS[aFlag]])
 	{
 	  Stdio.stderr.write(sprintf("Invalid value %s provided for %s.\n",
 				     FLAGS[aFlag], aFlag));
@@ -428,7 +425,7 @@ void help()
       Stdio.stdout.write(sprintf("--%s: %s (Default: %s)\n",
 				 aFlag,
 				 FLAG_HELP[aFlag],
-				 DEFAULTS[aFlag]));
+				 FLAG_DEFAULTS[aFlag]));
     }
 }
 
@@ -436,9 +433,9 @@ void help()
 // Main
 int main(int argc, array(string) argv)
 {
-  
-  mapping FLAGS = DEFAULTS|Arg.parse(argv);
+  mapping FLAGS = FLAG_DEFAULTS|Arg.parse(argv);
   check_flags(FLAGS);
+
   if ( FLAGS["help"]==1 | sizeof(FLAGS[Arg.REST])!=3)
     {
       help();
@@ -448,24 +445,24 @@ int main(int argc, array(string) argv)
   string INPUT = FLAGS[Arg.REST][0];
   string OUTPUT = FLAGS[Arg.REST][1];
   string NAME = FLAGS[Arg.REST][2];
-  FLAGS["workspace"] = combine_path(FLAGS["workspace"],
-				    MIME.encode_base64(Crypto.Random.random_string(10)));
-  mkdir(FLAGS["workspace"]);
+  string WORKSPACE = combine_path(FLAGS["workspace"],
+				  MIME.encode_base64(Crypto.Random.random_string(10)));
+  mkdir(WORKSPACE);
 
   if (FLAGS["type"]=="DeepZoom")
     DeepZoom(OUTPUT,
-	     NAME, FLAGS["workspace"],
+	     NAME, WORKSPACE,
 	     PrepareScaledInputFiles(INPUT,
-				     FLAGS["workspace"],
+				     WORKSPACE,
 				     1),
 	     (int)FLAGS["quality"]);
   else
     if (FLAGS["type"]=="Zoomify")
       Zoomify(OUTPUT,
-	      NAME, FLAGS["workspace"],
+	      NAME, WORKSPACE,
 	      PrepareScaledInputFiles(INPUT,
-				      FLAGS["workspace"],
+				      WORKSPACE,
 				      256),
 	      (int)FLAGS["quality"]);
-  rm(FLAGS["workspace"]);
+  rm(WORKSPACE);
 }
