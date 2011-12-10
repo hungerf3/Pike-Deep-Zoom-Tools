@@ -1,3 +1,5 @@
 * Add OpenZoom metadata generation
 * Add internal scaling
-* Add option for creating packed output
+* Add packed output
+* Add PNG output
+* Add WEBP output

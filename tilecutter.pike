@@ -8,9 +8,6 @@
 
 // Global Variables:
 
-// Path to a temporary workspace
-string TEMP_DIR = "";
-
 // Defaults for command line flags
 mapping DEFAULTS = ([
   "format":"jpeg",
@@ -22,16 +19,17 @@ mapping DEFAULTS = ([
 
 // Acceptable values for command line flags
 mapping ACCEPTABLE_VALUES =([
-  "type":(<"DeepZoom","Zoomify">)
+  "type":(<"DeepZoom","Zoomify">),
+  "format":(<"jpeg">)
 ]);
 
 // Documentation for command line flags
 mapping FLAG_HELP = ([
-  "format": "Format to use for output tiles",
+  "format": "Format to use for output tiles. Only jpeg is supported now.",
   "quality":"Quality to use for Jpeg encoding",
-  "type":"Type of tile data to produce. DeepZoom or Zoomify",
-  "workspace":"Directory to use for temporary files",
-  "help":"Display runtime help"
+  "type":"Type of tile data to produce. DeepZoom or Zoomify.",
+  "workspace":"Directory to use for temporary files.",
+  "help":"Display help."
 ]);
 
 
@@ -108,9 +106,8 @@ array(int) GetPNMSize(string aFile)
 string GetTemporaryFilename(string workspace,
                             int id)
 {
-  return Stdio.simplify_path(sprintf("%s/%d.pnm",
-                                     workspace,
-                                     id));
+  return combine_path(workspace,sprintf("%d.pnm",
+					id));
 }
 
 
@@ -256,8 +253,8 @@ int CutZoomifyTiles(string workspace,
   {
     group++;
     inGroup=0;
-    currentPath = Stdio.simplify_path(sprintf("%s/TileGroup%d",
-					      output,group));
+    currentPath = combine_path(output,sprintf("TileGroup%d",
+					      group));
     mkdir(currentPath);
   };
 
@@ -276,11 +273,11 @@ int CutZoomifyTiles(string workspace,
 		UpdateCurrentPath();
 		mkdir(currentPath);
 	      }
-	    Stdio.File(sprintf("%s/%d-%d-%d.jpg",
-			       currentPath,
-			       levels-level,
-			       x,
-			       y),
+	    Stdio.File(combine_path(currentPath,
+				    sprintf("%d-%d-%d.jpg",
+					    levels-level,
+					    x,
+					    y)),
 		       "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
 								     ({tileSize*x,tileSize*y}),
 								     ({tileSize,tileSize})),
@@ -319,18 +316,15 @@ void CutDeepZoomTiles(string workspace,
       int step = levels-level;
       string currentFile = GetTemporaryFilename(workspace,
 						level);
-      string currentPath = Stdio.simplify_path(sprintf("%s/%s",
-                                                        output,
-                                                        (string)step));
+      string currentPath = combine_path(output,(string)step);
       mkdir(currentPath);
       
       array(int) imageSize = GetPNMSize(currentFile);
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
       for (int x = 0 ; x < tiles[0] ; x++)
 	for (int y = 0 ; y < tiles[1] ; y++)
-	  Stdio.File(sprintf("%s/%d_%d.jpg",
-			     currentPath,
-			     x, y),
+	  Stdio.File(combine_path(currentPath,sprintf("%d_%d.jpg",
+						      x, y)),
 		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
 								   ({tileSize*x, tileSize*y}),
 								   ({tileSize,tileSize})),
@@ -357,14 +351,14 @@ void DeepZoom(string output,
 	      int quality)
 {
 
-  string tileDir = sprintf("%s/%s_files",output,name);
+  string tileDir = combine_path(output,sprintf("%s_files",name));
   mkdir(tileDir);
 
-  array(int) imageSize = GetPNMSize(sprintf("%s/0.pnm",workspace));
+  array(int) imageSize = GetPNMSize(combine_path(workspace,"0.pnm"));
 
-  Stdio.File(sprintf("%s/%s.dzi",
-		     output,
-		     name),
+  Stdio.File(combine_path(output,
+			  sprintf("%s.dzi",
+				  name)),
 	     "wct")
     ->write(GenerateDeepZoomMetadata(256,0,"jpg",
 				     imageSize[0],
@@ -392,13 +386,12 @@ void Zoomify(string output,
 	     int quality)
 {
 
-  string tileDir = sprintf("%s/%s",output,name);
+  string tileDir = combine_path(output,name);
   mkdir(tileDir);
 
-  array(int) imageSize = GetPNMSize(sprintf("%s/0.pnm",workspace));
+  array(int) imageSize = GetPNMSize(combine_path(workspace,"0.pnm"));
 
-  Stdio.File(sprintf("%s/ImageProperties.xml",
-		     tileDir),
+  Stdio.File(combine_path(tileDir,"ImageProperties.xml"),
 	     "wct")
     ->write(GenerateZoomifyMetadata(256,
 				    imageSize[0],
@@ -446,7 +439,7 @@ int main(int argc, array(string) argv)
   
   mapping FLAGS = DEFAULTS|Arg.parse(argv);
   check_flags(FLAGS);
-  if ( FLAGS["help"]==1 | sizeof(FLAGS[Arg.REST])!=4)
+  if ( FLAGS["help"]==1 | sizeof(FLAGS[Arg.REST])!=3)
     {
       help();
       exit(1);
@@ -455,25 +448,24 @@ int main(int argc, array(string) argv)
   string INPUT = FLAGS[Arg.REST][0];
   string OUTPUT = FLAGS[Arg.REST][1];
   string NAME = FLAGS[Arg.REST][2];
-  TEMP_DIR = Stdio.simplify_path(sprintf("%s/%s",
-					 TEMP_DIR,
-					 MIME.encode_base64(Crypto.Random.random_string(10))));
-  mkdir(TEMP_DIR);
+  FLAGS["workspace"] = combine_path(FLAGS["workspace"],
+				    MIME.encode_base64(Crypto.Random.random_string(10)));
+  mkdir(FLAGS["workspace"]);
 
   if (FLAGS["type"]=="DeepZoom")
     DeepZoom(OUTPUT,
-	     NAME, TEMP_DIR,
+	     NAME, FLAGS["workspace"],
 	     PrepareScaledInputFiles(INPUT,
-				     TEMP_DIR,
+				     FLAGS["workspace"],
 				     1),
 	     (int)FLAGS["quality"]);
   else
     if (FLAGS["type"]=="Zoomify")
       Zoomify(OUTPUT,
-	      NAME, TEMP_DIR,
+	      NAME, FLAGS["workspace"],
 	      PrepareScaledInputFiles(INPUT,
-				      TEMP_DIR,
+				      FLAGS["workspace"],
 				      256),
 	      (int)FLAGS["quality"]);
-  rm(TEMP_DIR);
+  rm(FLAGS["workspace"]);
 }
