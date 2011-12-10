@@ -21,6 +21,12 @@ mapping DEFAULTS = ([
   "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp"
 ]);
 
+
+// Acceptable values for command line flags
+mapping ACCEPTABLE_VALUES =([
+  "type":(<"DeepZoom","Zoomify">)
+]);
+
 // Documentation for command line flags
 mapping FLAG_HELP = ([
   "format": "Format to use for output tiles",
@@ -286,6 +292,22 @@ void DeepZoom(string output,
 		   256);
 }
 
+
+// check command lime flags
+void check_flags(mapping FLAGS)
+{
+  foreach(indices(FLAGS), mixed aFlag)
+    if (has_index(ACCEPTABLE_VALUES,aFlag))
+      if (!ACCEPTABLE_VALUES[aFlag][FLAGS[aFlag]])
+	{
+	  Stdio.stderr.write(sprintf("Invalid value %s provided for %s.\n",
+				     FLAGS[aFlag], aFlag));
+	  FLAGS["help"]=1;
+	}
+}
+
+/* Display help 
+ */
 void help()
 {
   Stdio.stdout.write("Usage: tilecutter.pike [flags] <input> <outputdir> <outputname>\n");
@@ -302,6 +324,7 @@ int main(int argc, array(string) argv)
 {
   
   mapping FLAGS = DEFAULTS|Arg.parse(argv);
+  check_flags(FLAGS);
   if ( FLAGS["help"]==1 | sizeof(FLAGS[Arg.REST])!=4)
     {
       help();
