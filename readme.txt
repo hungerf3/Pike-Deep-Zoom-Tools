@@ -6,3 +6,4 @@ the maximum size of the image that could be processed,
 and is less flexable than other tools that are restricted
 to images which can be loaded into memory.
 
+Input images should be in the NetPBM PNM format.
