@@ -262,8 +262,8 @@ int CutZoomifyTiles(string workspace,
       string currentFile = GetTemporaryFilename(workspace,level);
       array(int) imageSize = GetPNMSize(currentFile);
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
-      for (int x = 0 ; x < tiles[0] ; x++)
-	for (int y = 0 ; y < tiles[1] ; y++)
+      for (int y = 0 ; y < tiles[1] ; y++)
+	  for (int x = 0 ; x < tiles[0] ; x++)
 	  {
 	    if (inGroup >255) // Start a new group every 255 tiles
 	      {
@@ -318,8 +318,8 @@ void CutDeepZoomTiles(string workspace,
       
       array(int) imageSize = GetPNMSize(currentFile);
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
-      for (int x = 0 ; x < tiles[0] ; x++)
-	for (int y = 0 ; y < tiles[1] ; y++)
+      for (int y = 0 ; y < tiles[1] ; y++)
+	for (int x = 0 ; x < tiles[0] ; x++)
 	  Stdio.File(combine_path(currentPath,sprintf("%d_%d.jpg",
 						      x, y)),
 		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
