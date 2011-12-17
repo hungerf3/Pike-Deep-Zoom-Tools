@@ -6,6 +6,7 @@
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
 */
 
+
 // Defaults for command line flags
 mapping FLAG_DEFAULTS = ([
   "format":"jpeg",
@@ -200,24 +201,41 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   // pnmscalefixed can be used in place of pamscale for a ~30%
   // speedup, with some minor quality loss, due to it not
   // supporting the filter option.
-  string command_template = "pamscale 0.5 -filter sinc < %s  > %s";
+  string command_template = "pamscale 0.5 -filter sinc";
+  String.Buffer command = String.Buffer();
+  array(int) image_sizes;
+
   int counter = 0;
 
   // Link the initial input file as file 0
   System.symlink(source,
                  GetTemporaryFilename(workspace,counter));
   
+  // Add the initial step to the command buffer
+  command.add(command_template);
+  command.add(sprintf(" < %s ",
+		      GetTemporaryFilename(workspace,counter)));
+
+  // Get image sizes
+  image_sizes = GetPNMSize(GetTemporaryFilename(workspace,
+						counter));
   // Create new images until we are under the limit
-  while (Array.any(GetPNMSize(GetTemporaryFilename(workspace,
-                                                   counter)),
+  while (Array.any(image_sizes,
                    `>,
                    limit))
-    Process.spawn(sprintf(command_template,
-                          GetTemporaryFilename(workspace,
-                                               counter),
-                          GetTemporaryFilename(workspace,
-                                               ++counter)))
-      ->wait();
+    {
+      image_sizes = image_sizes[*]/2;
+      command.add(sprintf(" | tee %s | ",
+			  GetTemporaryFilename(workspace,
+                                               ++counter)));
+      command.add(command_template);
+    }
+  command.add(" cat > /dev/null "); // Empty the pipe
+  // Run all of the resizes as a single pipeline
+  // tapped at each output stage
+  Process.spawn(command.get())
+    ->wait();
+      
   return counter;
 }
 
