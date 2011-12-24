@@ -230,7 +230,7 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
                                                ++counter)));
       command.add(command_template);
     }
-  command.add(" cat > /dev/null "); // Empty the pipe
+  command.add(" > /dev/null "); // Empty the pipe
   // Run all of the resizes as a single pipeline
   // tapped at each output stage
   Process.spawn(command.get())
@@ -281,7 +281,7 @@ int CutZoomifyTiles(string workspace,
       array(int) imageSize = GetPNMSize(currentFile);
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
       for (int y = 0 ; y < tiles[1] ; y++)
-	  for (int x = 0 ; x < tiles[0] ; x++)
+	for (int x = 0 ; x < tiles[0] ; x++)
 	  {
 	    if (inGroup >255) // Start a new group every 255 tiles
 	      {
