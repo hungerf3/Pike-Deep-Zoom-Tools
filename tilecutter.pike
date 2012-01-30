@@ -10,10 +10,11 @@
 // Defaults for command line flags
 mapping FLAG_DEFAULTS = ([
   "format":"jpeg",
-  "help":"False",
+  "help":0,
   "quality":"60",
   "type":"DeepZoom",
-  "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp"
+  "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp",
+  "verbose":0
 ]);
 
 // Acceptable values for command line flags
@@ -28,8 +29,11 @@ mapping FLAG_HELP = ([
   "quality":"Quality to use for Jpeg encoding",
   "type":"Type of tile data to produce. DeepZoom or Zoomify.",
   "workspace":"Directory to use for temporary files.",
-  "help":"Display help."
+  "help":"Display help.",
+  "verbose":"Display more information."
 ]);
+
+mapping FLAGS = ([]);
 
 
 /*
@@ -201,42 +205,74 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   // pnmscalefixed can be used in place of pamscale for a ~30%
   // speedup, with some minor quality loss, due to it not
   // supporting the filter option.
-  string command_template = "pamscale 0.5 -filter sinc";
+  string command_template = "pamscale -xysize %d %d -filter sinc";
   String.Buffer command = String.Buffer();
   array(int) image_sizes;
 
   int counter = 0;
 
-  // Link the initial input file as file 0
-  System.symlink(source,
-                 GetTemporaryFilename(workspace,counter));
-  
-  // Add the initial step to the command buffer
-  command.add(command_template);
-  command.add(sprintf(" < %s ",
-		      GetTemporaryFilename(workspace,counter)));
+  array(int) next_level(array(int) image_sizes)
+  {
+    image_sizes = image_sizes[*]/2;
+    image_sizes = max(image_sizes[*],1);
+    return image_sizes;
+  };
+
+  int next_power_of_2(int x)
+  {
+    return pow(2,(int)Math.log2((float)x)+1);
+  };
 
   // Get image sizes
-  image_sizes = GetPNMSize(GetTemporaryFilename(workspace,
-						counter));
+  image_sizes = GetPNMSize(source);
+
+  if (FLAGS["verbose"])
+    Stdio.stderr.write(sprintf("Initial Image:  %d by %d\n",
+			       image_sizes[0], image_sizes[1]));
+
+  // Generate level 0 at the next higher power of 2.
+  image_sizes[0] = next_power_of_2(image_sizes[0]);
+  image_sizes[1] = next_power_of_2(image_sizes[1]);
+
+  if (FLAGS["verbose"])
+    Stdio.stderr.write(sprintf("Stage %d: %d by %d\n",
+			       counter, image_sizes[0], image_sizes[1]));
+  
+  command.add(sprintf(command_template,
+		      image_sizes[0],
+		      image_sizes[1]));
+  command.add(sprintf(" < %s ",
+		      source));
+  command.add(sprintf("| tee %s",
+		      GetTemporaryFilename(workspace,
+					   counter)));
+
   // Create new images until we are under the limit
-  while (Array.any(image_sizes,
-                   `>,
-                   limit))
+  do
     {
-      image_sizes = image_sizes[*]/2;
-      command.add(sprintf(" | tee %s | ",
+      image_sizes = next_level(image_sizes);
+      counter++;
+
+      if (FLAGS["verbose"])
+	Stdio.stderr.write(sprintf("Stage %d: %d by %d\n",
+				   counter, image_sizes[0], image_sizes[1]));
+      command.add(" | ");
+      command.add(sprintf(command_template,
+			  image_sizes[0],
+			  image_sizes[1]));
+      command.add(sprintf(" | tee %s ",
 			  GetTemporaryFilename(workspace,
-                                               ++counter)));
-      command.add(command_template);
+                                               counter)));
     }
-  command.add(" > /dev/null "); // Empty the pipe
+  while (has_value(image_sizes[*]>limit,1));
+					   
+					   command.add(" > /dev/null "); // Empty the pipe
   // Run all of the resizes as a single pipeline
   // tapped at each output stage
   Process.spawn(command.get())
     ->wait();
       
-  return counter;
+  return counter++;
 }
 
 
@@ -280,8 +316,8 @@ int CutZoomifyTiles(string workspace,
       string currentFile = GetTemporaryFilename(workspace,level);
       array(int) imageSize = GetPNMSize(currentFile);
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
-      for (int y = 0 ; y < tiles[1] ; y++)
 	for (int x = 0 ; x < tiles[0] ; x++)
+	  for (int y = 0 ; y < tiles[1] ; y++)
 	  {
 	    if (inGroup >255) // Start a new group every 255 tiles
 	      {
@@ -326,18 +362,21 @@ void CutDeepZoomTiles(string workspace,
                            "progressive":1]);
     
 
-  for (int level = levels; level >=0 ; level --)
+  for (int level = 0; level <= levels ; level ++)
     {
-      int step = levels-level;
       string currentFile = GetTemporaryFilename(workspace,
 						level);
-      string currentPath = combine_path(output,(string)step);
+      string currentPath = combine_path(output,(string)(levels-level));
       mkdir(currentPath);
-      
       array(int) imageSize = GetPNMSize(currentFile);
+      if (FLAGS["verbose"])
+	Stdio.stderr.write(sprintf("Cutting Level %d; %d x %d\n",
+				   level,
+				   imageSize[0],
+				   imageSize[1]));
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
-      for (int y = 0 ; y < tiles[1] ; y++)
-	for (int x = 0 ; x < tiles[0] ; x++)
+      for (int x = 0 ; x < tiles[0] ; x++)
+	for (int y = 0 ; y < tiles[1] ; y++)
 	  Stdio.File(combine_path(currentPath,sprintf("%d_%d.jpg",
 						      x, y)),
 		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
@@ -451,7 +490,7 @@ void help()
 // Main
 int main(int argc, array(string) argv)
 {
-  mapping FLAGS = FLAG_DEFAULTS|Arg.parse(argv);
+  FLAGS = FLAG_DEFAULTS|Arg.parse(argv);
   check_flags(FLAGS);
 
   if ( FLAGS["help"]==1 | sizeof(FLAGS[Arg.REST])!=3)
