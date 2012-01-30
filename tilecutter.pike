@@ -10,11 +10,11 @@
 // Defaults for command line flags
 mapping FLAG_DEFAULTS = ([
   "format":"jpeg",
-  "help":0,
+  "help":"False",
   "quality":"60",
   "type":"DeepZoom",
   "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp",
-  "verbose":0
+  "verbose":"False"
 ]);
 
 // Acceptable values for command line flags
