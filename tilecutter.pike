@@ -1,6 +1,6 @@
 #! /usr/local/bin/pike
 /*  Tilecutter.pike
-    Copyright 2011 by Jeff Hungerford <hungerf3@house.ofdoom.com>
+    Copyright 2011-2012 by Jeff Hungerford <hungerf3@house.ofdoom.com>
     
     This program takes a PNM format image, and splits it into a set
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
@@ -20,12 +20,12 @@ mapping FLAG_DEFAULTS = ([
 // Acceptable values for command line flags
 mapping FLAG_ACCEPTABLE_VALUES =([
   "type":(<"DeepZoom","Zoomify">),
-  "format":(<"jpeg">)
+  "format":(<"jpeg","PNG">)
 ]);
 
 // Documentation for command line flags
 mapping FLAG_HELP = ([
-  "format": "Format to use for output tiles. Only jpeg is supported now.",
+  "format": "Format to use for output tiles..",
   "quality":"Quality to use for Jpeg encoding",
   "type":"Type of tile data to produce. DeepZoom or Zoomify.",
   "workspace":"Directory to use for temporary files.",
@@ -290,16 +290,35 @@ int CutZoomifyTiles(string workspace,
 		    int levels,
 		    int quality,
 		    string output,
-		    int tileSize)
+		    int tileSize,
+		    string format)
 {
   int count = 0;    // Total tiles cut
   int group = -1;    // Current tile group
   int inGroup = 0;  // Tiles in current group
   string currentPath; // Current working path.
+
   mapping JPEG_OPTIONS = (["optimize":1,
                            "quality":quality,
                            "progressive":1]);
 
+  mapping encoders = ([
+    "jpeg": lambda (Image.Image data)
+	    {
+	      return Image.JPEG.encode(data,
+				       JPEG_OPTIONS);
+	    },
+    "PNG": lambda (Image.Image data)
+	   {
+	     return Image.PNG.encode(data);
+	   }
+  ]);
+
+  mapping namePatterns = ([
+    "jpeg": "%d-%d-%d.jpg",
+    "PNG": "%d-%d-%d.png"
+  ]);
+    
   void UpdateCurrentPath()
   {
     group++;
@@ -308,6 +327,9 @@ int CutZoomifyTiles(string workspace,
 					      group));
     mkdir(currentPath);
   };
+
+  function encoder = encoders[format];
+  string namePattern = namePatterns[format];
 
   mkdir(output);
   UpdateCurrentPath();
@@ -325,14 +347,13 @@ int CutZoomifyTiles(string workspace,
 		mkdir(currentPath);
 	      }
 	    Stdio.File(combine_path(currentPath,
-				    sprintf("%d-%d-%d.jpg",
+				    sprintf(namePattern,
 					    levels-level,
 					    x,
 					    y)),
-		       "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
-								     ({tileSize*x,tileSize*y}),
-								     ({tileSize,tileSize})),
-						       JPEG_OPTIONS));
+		       "wct")->write(encoder(LoadPNMRegion(currentFile,
+							   ({tileSize*x,tileSize*y}),
+							   ({tileSize,tileSize}))));
 	    inGroup++;
 	    count++;
 	  }
@@ -355,12 +376,32 @@ void CutDeepZoomTiles(string workspace,
                       int levels,
                       int quality,
                       string output,
-		      int tileSize)
+		      int tileSize,
+		      string format)
 {
   mapping JPEG_OPTIONS = (["optimize":1,
                            "quality":quality,
                            "progressive":1]);
-    
+
+  mapping encoders = ([
+    "jpeg": lambda (Image.Image data)
+	    {
+	      return Image.JPEG.encode(data,
+				       JPEG_OPTIONS);
+	    },
+    "PNG": lambda (Image.Image data)
+	   {
+	     return Image.PNG.encode(data);
+	   }
+  ]);
+
+  mapping namePatterns = ([
+    "jpeg": "%d_%d.jpg",
+    "PNG": "%d_%d.png"
+  ]);
+  function encoder = encoders[format];
+  string namePattern = namePatterns[format];
+
 
   for (int level = 0; level <= levels ; level ++)
     {
@@ -377,12 +418,11 @@ void CutDeepZoomTiles(string workspace,
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
       for (int x = 0 ; x < tiles[0] ; x++)
 	for (int y = 0 ; y < tiles[1] ; y++)
-	  Stdio.File(combine_path(currentPath,sprintf("%d_%d.jpg",
+	  Stdio.File(combine_path(currentPath,sprintf(namePattern,
 						      x, y)),
-		     "wct")->write(Image.JPEG.encode(LoadPNMRegion(currentFile,
-								   ({tileSize*x, tileSize*y}),
-								   ({tileSize,tileSize})),
-						     JPEG_OPTIONS));
+		     "wct")->write(encoder(LoadPNMRegion(currentFile,
+							 ({tileSize*x, tileSize*y}),
+							 ({tileSize,tileSize}))));
       // Clean up the tile data
       rm (currentFile);
     }
@@ -402,9 +442,13 @@ void DeepZoom(string output,
 	      string name,
 	      string workspace,
 	      int levels,
-	      int quality)
+	      int quality,
+	      string format)
 {
-
+  mapping extensions = ([
+    "jpeg": "jpg",
+    "PNG": "png"
+  ]);
   string tileDir = combine_path(output,sprintf("%s_files",name));
   mkdir(tileDir);
 
@@ -414,14 +458,15 @@ void DeepZoom(string output,
 			  sprintf("%s.dzi",
 				  name)),
 	     "wct")
-    ->write(GenerateDeepZoomMetadata(256,0,"jpg",
+    ->write(GenerateDeepZoomMetadata(256,0,extensions[format],
 				     imageSize[0],
 				     imageSize[1]));
   CutDeepZoomTiles(workspace,
 		   levels,
 		   quality,
 		   tileDir,
-		   256);
+		   256,
+		   format);
 }
 
 
@@ -437,7 +482,8 @@ void Zoomify(string output,
 	     string name,
 	     string workspace,
 	     int levels,
-	     int quality)
+	     int quality,
+	     string format)
 {
 
   string tileDir = combine_path(output,name);
@@ -454,7 +500,8 @@ void Zoomify(string output,
 						    levels,
 						    quality,
 						    tileDir,
-						    256)));
+						    256,
+						    "jpeg")));
 						    
 }
 
@@ -462,16 +509,22 @@ void Zoomify(string output,
 // check command lime flags
 void check_flags(mapping FLAGS)
 {
+  // Preflight
+  if (FLAGS["type"] == "Zoomify")
+    {
+      FLAG_ACCEPTABLE_VALUES["format"]=(<"jpeg">);
+    }
+
   foreach(indices(FLAGS), mixed aFlag)
     if (has_index(FLAG_ACCEPTABLE_VALUES,aFlag))
       if (!FLAG_ACCEPTABLE_VALUES[aFlag][FLAGS[aFlag]])
 	{
-	  Stdio.stderr.write(sprintf("Invalid value %s provided for %s.\n",
-				     FLAGS[aFlag], aFlag));
+	  Stdio.stderr.write(sprintf("Invalid value %s provided for %s.\nAcceptable values are: %s\n",
+				     FLAGS[aFlag], aFlag,
+				     ((array)FLAG_ACCEPTABLE_VALUES[aFlag])*", "));
 	  FLAGS["help"]=1;
 	}
 }
-
 
 // Display help 
 void help()
@@ -512,7 +565,8 @@ int main(int argc, array(string) argv)
 	     PrepareScaledInputFiles(INPUT,
 				     WORKSPACE,
 				     1),
-	     (int)FLAGS["quality"]);
+	     (int)FLAGS["quality"],
+	     FLAGS["format"]);
   else
     if (FLAGS["type"]=="Zoomify")
       Zoomify(OUTPUT,
@@ -520,6 +574,7 @@ int main(int argc, array(string) argv)
 	      PrepareScaledInputFiles(INPUT,
 				      WORKSPACE,
 				      256),
-	      (int)FLAGS["quality"]);
+	      (int)FLAGS["quality"],
+	      "jpeg");
   rm(WORKSPACE);
 }
