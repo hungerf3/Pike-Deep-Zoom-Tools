@@ -27,14 +27,20 @@ mapping FLAG_HELP = ([
   "help":"Display help."
 ]);
 
+
+string WorkingPath(string aFile)
+{
+  return combine_path(workspace, aFile);
+}
+
 void DecodeTiff(string file_name)
 {
   Stdio.stderr.write(sprintf("Decoding %s\n",file_name));
   string command_template = "tifftopnm --alphaout=%s --byrow %s > %s";
   Process.spawn(sprintf(command_template,
-			combine_path(workspace,"alpha.pgm"),
+			WorkingPath("alpha.pgm"),
 			file_name,
-			combine_path(workspace,"data.pnm")))
+			WorkingPath("data.pnm")))
     ->wait();
 }
 
@@ -46,18 +52,18 @@ void AdjustMask(string input_mask,
   String.Buffer command = String.Buffer();
   // Smooth the outer 64 pixels of the mask
   command.add(sprintf("pnmsmooth --width=65 --height=65  %s ",
-		      combine_path(workspace,input_mask)));
+		      WorkingPath(input_mask)));
   command.add(" | ");
   // Clamp the mask outside of the origional boundries.
   command.add(sprintf("pamarith -min - %s",
-		      combine_path(workspace,input_mask)));
+		      WorkingPath(input_mask)));
   command.add(" | ");
   // Only apply the mask when over the already composed region.
   // image_mask marks the unused region; the inverse of
   //the occupied region.
   command.add(sprintf("pamarith -max - %s > %s",
-		      combine_path(workspace,image_mask),
-		      combine_path(workspace,output_mask)));
+		      WorkingPath(image_mask),
+		      WorkingPath(output_mask)));
 
   Process.spawn(command.get())
     ->wait();
@@ -70,21 +76,21 @@ void UpdateImageMask(string image_mask,
   String.Buffer command = String.Buffer();
   // invert the new mask
   command.add(sprintf("pnminvert %s",
-		      combine_path(workspace,partial_mask)));
+		      WorkingPath(partial_mask)));
   command.add(" | ");
   // merge the masks
   command.add(sprintf("pamarith -min - %s",
-		      combine_path(workspace,image_mask)));
+		      WorkingPath(image_mask)));
 
   command.add(" | ");
   // Reduce to pgm
   command.add(sprintf("ppmtopgm > %s",
-		      combine_path(workspace,"new-mask.pgm")));
+		      WorkingPath("new-mask.pgm")));
   Process.spawn(command.get())
     ->wait();
-  rm(combine_path(workspace,image_mask));
-  mv(combine_path(workspace,"new-mask.pgm"),
-     combine_path(workspace,image_mask));
+  rm(WorkingPath(image_mask));
+  mv(WorkingPath("new-mask.pgm"),
+     WorkingPath(image_mask));
 }
 	      
 void BlendImage(string composite_image,
@@ -93,14 +99,14 @@ void BlendImage(string composite_image,
 {
   Stdio.stderr.write("blending images\n");
   Process.spawn(sprintf("pamcomp -alpha=%s %s %s %s",
-			combine_path(workspace,image_mask),
-			combine_path(workspace,partial_image),
-			combine_path(workspace,composite_image),
-			combine_path(workspace,"new-composite-image.pam")))
+			WorkingPath(image_mask),
+			WorkingPath(partial_image),
+			WorkingPath(composite_image),
+			WorkingPath("new-composite-image.pam")))
     ->wait();
-  rm(combine_path(workspace,composite_image));
-  mv(combine_path(workspace,"new-composite-image.pam"),
-     combine_path(workspace,composite_image));
+  rm(WorkingPath(composite_image));
+  mv(WorkingPath("new-composite-image.pam"),
+     WorkingPath(composite_image));
 }
 
 
@@ -139,17 +145,17 @@ int main(int argc, array(string) argv)
       if(first_image) // Just move them into place
 	{
 	  first_image=0;
-	  mv(combine_path(workspace,"data.pnm"),
-	     combine_path(workspace,"image.pnm"));
-	  mv(combine_path(workspace,"alpha.pgm"),
-	     combine_path(workspace,"image-alpha.pgm"));
+	  mv(WorkingPath("data.pnm"),
+	     WorkingPath("image.pnm"));
+	  mv(WorkingPath("alpha.pgm"),
+	     WorkingPath("image-alpha.pgm"));
 	}
       else
 	{
 	  AdjustMask("alpha.pgm",
 		     "image-alpha.pgm",
 		     "new-alpha.pgm");
-	  rm(combine_path(workspace,"alpha.pgm"));
+	  rm(WorkingPath("alpha.pgm"));
 	  BlendImage("image.pnm",
 		     "data.pnm",
 		     "new-alpha.pgm");
@@ -158,14 +164,14 @@ int main(int argc, array(string) argv)
 	  foreach(({"new-alpha.pgm",
 		    "data.pgm",
 		    "alpha.pgm"}), string aFile)
-	    rm(combine_path(workspace,aFile));
+	    rm(WorkingPath(aFile));
 	}
     }
-  mv(combine_path(workspace,"image.pnm"),
+  mv(WorkingPath("image.pnm"),
      FLAGS["output"]);
   foreach(({"image.pnm",
 	    "image-alpha.pgm"}),
 	  string aFile)
-    rm(combine_path(workspace,aFile));
+    rm(WorkingPath(aFile));
   rm(workspace);
 }
