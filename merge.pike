@@ -5,10 +5,10 @@
     This program takes a set of overlapping TIFF images, and merges
     them into a single image.
 
-    It won't do as good of a job as zoomify, and it uses the
+    It won't do as good of a job as enblend, and it uses the
     netpbm tools to do most of the work, but it should be
-    usable as a workaround for composing large images until
-    zoomify is usable again.
+    usable as a workaround for cases where enblend or enfuse
+    can not be used.
 */
 
 string workspace;
