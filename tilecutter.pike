@@ -53,7 +53,7 @@ string GenerateZoomifyMetadata(int tile_size,
 }
 
 /* 
-   Generate theXML data for a seadragon deep zoom image.
+   Generate the XML data for a seadragon deep zoom image.
 
    tile_size: Number of pixels on one side of a square tile
    overlap: Number of pixels by which tiles overlap
@@ -265,7 +265,8 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
                                                counter)));
     }
   while (has_value(image_sizes[*]>limit,1));
-					   
+  // while any of the image dimensions are greater than the limit
+
 					   command.add(" > /dev/null "); // Empty the pipe
   // Run all of the resizes as a single pipeline
   // tapped at each output stage
