@@ -1,6 +1,5 @@
 * Add internal scaling
 * Add packed output
 * Add WEBP output
-* Use PV to speed up image scaling, and show a progress bar
 * Add support for Google Maps API
 * Add support for Google Earth tile sets
