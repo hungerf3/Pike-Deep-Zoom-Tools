@@ -243,7 +243,7 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   if (FLAGS["PV"])
     {
     command.add(sprintf(PV_template,
-			image_sizes[0]*3*4));
+			image_sizes[0]*3*32));
     command.add(sprintf(" %s |",
 			source));
     }
@@ -270,7 +270,7 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
       if (FLAGS["PV"])
 	{
 	  command.add(sprintf(PV_template,
-			      image_sizes[0]*3*4));
+			      max(image_sizes[0]*3*32, 256*1024)));
 	  command.add("-q | ");
 	}
       command.add(sprintf(command_template,
