@@ -11,7 +11,7 @@
 mapping FLAG_DEFAULTS = ([
   "format":"jpeg",
   "help":0,
-  "quality":"60",
+  "quality":60,
   "type":"DeepZoom",
   "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp",
   "verbose":0,
@@ -552,7 +552,7 @@ void help()
       Stdio.stdout.write(sprintf("--%s: %s (Default: %s)\n",
 				 aFlag,
 				 FLAG_HELP[aFlag],
-				 FLAG_DEFAULTS[aFlag]));
+				 (string)FLAG_DEFAULTS[aFlag]));
     }
 }
 
