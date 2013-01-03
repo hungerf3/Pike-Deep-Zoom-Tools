@@ -10,19 +10,17 @@ HEIGHT=$(ls -1 *.jpg | cut -f1 -d. | cut -f1 -d_ | sort -n | tail -1)
 
 for ROW in $(seq 0 ${HEIGHT});
 do
-    rm work.txt
-    touch work.txt
+    WORK= " "
     for COL in $(seq 0 ${WIDTH});
     do
-	echo ${ROW}_${COL}.pnm >> work.txt
+	WORK="${WORK} ${ROW}_${COL}.pnm"
     done
-    pnmcat -tb $(cat work.txt) > row-${ROW}.pnm
+    pnmcat -tb ${WORK} > row-${ROW}.pnm
 done
-rm work.txt
-touch work.txt
+WORK= " "
 for ROW in $(seq 0 ${HEIGHT});
 do
-    echo row-${ROW}.pnm >> work.txt
+    WORK="${WORK} row-${ROW}.pnm"
 done
 
-pnmcat -lr $(cat work.txt) > out.pnm
+pnmcat -lr ${WORK} > out.pnm
