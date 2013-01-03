@@ -1,6 +1,6 @@
 #! /usr/local/bin/pike
 /*  Tilecutter.pike
-    Copyright 2011-2012 by Jeff Hungerford <hungerf3@house.ofdoom.com>
+    Copyright 2011-2013 by Jeff Hungerford <hungerf3@house.ofdoom.com>
     
     This program takes a PNM format image, and splits it into a set
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
