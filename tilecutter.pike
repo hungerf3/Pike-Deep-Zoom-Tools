@@ -569,10 +569,13 @@ int main(int argc, array(string) argv)
       exit(1);
     }
 
-  string INPUT = FLAGS[Arg.REST][0];
-  string OUTPUT = FLAGS[Arg.REST][1];
+  string INPUT = combine_path(getcwd(),
+			      FLAGS[Arg.REST][0]);
+  string OUTPUT = combine_path(getcwd(),
+			       FLAGS[Arg.REST][1]);
   string NAME = FLAGS[Arg.REST][2];
-  string WORKSPACE = combine_path(FLAGS["workspace"],
+  string WORKSPACE = combine_path(getcwd(),
+				  FLAGS["workspace"],
 				  MIME.encode_base64(Crypto.Random.random_string(10)));
   mkdir(WORKSPACE);
 
