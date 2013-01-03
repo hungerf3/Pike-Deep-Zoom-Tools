@@ -1,6 +1,6 @@
 #! /usr/local/bin/pike
 /*  merge.pike
-    Copyright 2011 by Jeff Hungerford <hungerf3@house.ofdoom.com>
+    Copyright 2011-2013 by Jeff Hungerford <hungerf3@house.ofdoom.com>
     
     This program takes a set of overlapping TIFF images, and merges
     them into a single image.
@@ -39,7 +39,8 @@ void DecodeTiff(string file_name)
   string command_template = "tifftopnm --alphaout=%s --byrow %s > %s";
   Process.spawn(sprintf(command_template,
 			WorkingPath("alpha.pgm"),
-			file_name,
+			combine_path(getcwd(),
+				     file_name),
 			WorkingPath("data.pnm")))
     ->wait();
 }
