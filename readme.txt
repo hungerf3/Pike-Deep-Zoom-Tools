@@ -22,3 +22,8 @@ It should have no limitations on image size.
 
 Input should be a file listing paths to TIFF input files,
 ordered background to foreground.
+
+stitch.sh:
+---------
+A quick script that uses netPBM to stitch a level from a
+Deep Zoom tileset into a single image.
