@@ -15,7 +15,6 @@ mapping FLAG_DEFAULTS = ([
   "type":"DeepZoom",
   "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp",
   "verbose":0,
-  "PV":0
 ]);
 
 // Acceptable values for command line flags
@@ -32,7 +31,6 @@ mapping FLAG_HELP = ([
   "workspace":"Directory to use for temporary files.",
   "help":"Display help.",
   "verbose":"Display more information.",
-  "PV":"Use the PV pipe viewer for progress reports."
 ]);
 
 mapping FLAGS = ([]);
@@ -208,7 +206,6 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   // speedup, with some minor quality loss, due to it not
   // supporting the filter option.
   string command_template = "pamscale -xysize %d %d -filter sinc";
-  string PV_template = "pv -B %d ";
   String.Buffer command = String.Buffer();
   array(int) image_sizes;
 
@@ -240,19 +237,11 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
   if (FLAGS["verbose"])
     Stdio.stderr.write(sprintf("Stage %d: %d by %d\n",
 			       counter, image_sizes[0], image_sizes[1]));
-  if (FLAGS["PV"])
-    {
-    command.add(sprintf(PV_template,
-			image_sizes[0]*3*32));
-    command.add(sprintf(" %s |",
-			source));
-    }
   command.add(sprintf(command_template,
 		      image_sizes[0],
 		      image_sizes[1]));
-  if (!FLAGS["PV"])
-    command.add(sprintf(" < %s ",
-			source));
+  command.add(sprintf(" < %s ",
+		      source));
   command.add(sprintf("| tee %s",
 		      GetTemporaryFilename(workspace,
 					   counter)));
@@ -267,12 +256,6 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
 	Stdio.stderr.write(sprintf("Stage %d: %d by %d\n",
 				   counter, image_sizes[0], image_sizes[1]));
       command.add(" | ");
-      if (FLAGS["PV"])
-	{
-	  command.add(sprintf(PV_template,
-			      max(image_sizes[0]*3*32, 256*1024)));
-	  command.add("-q | ");
-	}
       command.add(sprintf(command_template,
 			  image_sizes[0],
 			  image_sizes[1]));
