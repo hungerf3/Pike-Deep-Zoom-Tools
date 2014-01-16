@@ -3,4 +3,4 @@
 * Add WEBP output
 * Add support for Google Maps API
 * Add support for Google Earth tile sets
-* Support 16/32 bit files
+* Support for user-defined mapping after scaling
