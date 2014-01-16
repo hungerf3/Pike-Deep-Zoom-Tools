@@ -559,7 +559,7 @@ int main(int argc, array(string) argv)
   string NAME = FLAGS[Arg.REST][2];
   string WORKSPACE = combine_path(getcwd(),
 				  FLAGS["workspace"],
-				  MIME.encode_base64(Crypto.Random.random_string(10)));
+				  String.string2hex(Crypto.Random.random_string(10)));
   mkdir(WORKSPACE);
 
   if (FLAGS["type"]=="DeepZoom")
