@@ -131,7 +131,7 @@ int main(int argc, array(string) argv)
 {
   mapping FLAGS = FLAG_DEFAULTS|Arg.parse(argv);
   workspace =  combine_path(FLAGS["workspace"],
-			    MIME.encode_base64(Crypto.Random.random_string(10)));
+			    String.string2hex(Crypto.Random.random_string(10)));
 
   if (FLAGS["help"]==1)
     {
