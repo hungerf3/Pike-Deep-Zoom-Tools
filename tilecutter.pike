@@ -1,6 +1,6 @@
 #! /usr/local/bin/pike
 /*  Tilecutter.pike
-    Copyright 2011-2013 by Jeff Hungerford <hungerf3@house.ofdoom.com>
+    Copyright 2011-2014 by Jeff Hungerford <hungerf3@house.ofdoom.com>
     
     This program takes a PNM format image, and splits it into a set
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
@@ -19,15 +19,15 @@ mapping FLAG_DEFAULTS = ([
 
 // Acceptable values for command line flags
 mapping FLAG_ACCEPTABLE_VALUES =([
-  "type":(<"DeepZoom","Zoomify">),
+  "type":(<"DeepZoom", "SeaDragon", "Zoomify">),
   "format":(<"jpeg","PNG">)
 ]);
 
 // Documentation for command line flags
 mapping FLAG_HELP = ([
-  "format": "Format to use for output tiles..",
-  "quality":"Quality to use for Jpeg encoding",
-  "type":"Type of tile data to produce. DeepZoom or Zoomify.",
+  "format": "Format to use for output tiles.",
+  "quality":"Quality to use for Jpeg encoding.",
+  "type":"Type of tile data to produce",
   "workspace":"Directory to use for temporary files.",
   "help":"Display help.",
   "verbose":"Display more information.",
@@ -521,7 +521,7 @@ void check_flags(mapping FLAGS)
 	{
 	  Stdio.stderr.write(sprintf("Invalid value %s provided for %s.\nAcceptable values are: %s\n",
 				     FLAGS[aFlag], aFlag,
-				     ((array)FLAG_ACCEPTABLE_VALUES[aFlag])*", "));
+				     (indices(FLAG_ACCEPTABLE_VALUES[aFlag])*", ")));
 	  FLAGS["help"]=1;
 	}
 }
@@ -532,10 +532,15 @@ void help()
   Stdio.stdout.write("Usage: tilecutter.pike [flags] <input> <outputdir> <outputname>\n");
   foreach(indices(FLAG_HELP), string aFlag)
     {
-      Stdio.stdout.write(sprintf("--%s: %s (Default: %s)\n",
+      string acceptable_flags = "";
+      if (FLAG_ACCEPTABLE_VALUES[aFlag])
+	acceptable_flags = sprintf("(Acceptable: %s )",indices(FLAG_ACCEPTABLE_VALUES[aFlag])*", ");
+
+      Stdio.stdout.write(sprintf("--%s: %s (Default: %s) %s\n",
 				 aFlag,
 				 FLAG_HELP[aFlag],
-				 (string)FLAG_DEFAULTS[aFlag]));
+				 (string)FLAG_DEFAULTS[aFlag],
+				 acceptable_flags));
     }
 }
 
@@ -562,7 +567,7 @@ int main(int argc, array(string) argv)
 				  String.string2hex(Crypto.Random.random_string(10)));
   mkdir(WORKSPACE);
 
-  if (FLAGS["type"]=="DeepZoom")
+  if ((<"DeepZoom","SeaDragon">)[FLAGS["type"]])
     DeepZoom(OUTPUT,
 	     NAME, WORKSPACE,
 	     PrepareScaledInputFiles(INPUT,
@@ -570,14 +575,13 @@ int main(int argc, array(string) argv)
 				     1),
 	     (int)FLAGS["quality"],
 	     FLAGS["format"]);
-  else
-    if (FLAGS["type"]=="Zoomify")
-      Zoomify(OUTPUT,
-	      NAME, WORKSPACE,
-	      PrepareScaledInputFiles(INPUT,
-				      WORKSPACE,
-				      256),
-	      (int)FLAGS["quality"],
-	      "jpeg");
+  if ((<"Zoomify">)[FLAGS["type"]])
+    Zoomify(OUTPUT,
+	    NAME, WORKSPACE,
+	    PrepareScaledInputFiles(INPUT,
+				    WORKSPACE,
+				    256),
+	    (int)FLAGS["quality"],
+	    "jpeg");
   rm(WORKSPACE);
 }
