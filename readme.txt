@@ -9,7 +9,7 @@ and is less flexable than other tools that are restricted
 to images which can be loaded into memory.
 
 Input images should be in the NetPBM PNM format.
-Full paths are currently required.
+NetPBM is used for scaling.
 
 merge.pike:
 ----------
