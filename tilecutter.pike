@@ -19,8 +19,16 @@ mapping FLAG_DEFAULTS = ([
 
 // Acceptable values for command line flags
 mapping FLAG_ACCEPTABLE_VALUES =([
-  "type":(<"DeepZoom", "SeaDragon", "Zoomify">),
-  "format":(<"jpeg","PNG">)
+  "type":(<"DeepZoom",
+	   "SeaDragon",
+	   "Zoomify"
+  >),
+  "format":(<"jpeg",
+	     "png",
+#if constant(Image.WebP)
+	     "webp",
+#endif
+  >)
 ]);
 
 // Documentation for command line flags
@@ -276,6 +284,33 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
 }
 
 
+mapping get_encoders(mapping options)
+{
+  mapping encoders = ([
+    "jpeg": lambda (Image.Image data)
+	    {
+	      return Image.JPEG.encode(data,
+				       (["optimize":1,
+					 "quality":options->quality,
+					 "progressive":1]));
+	    },
+    "png": lambda (Image.Image data)
+	   {
+	     return Image.PNG.encode(data);
+	   },
+#if constant(Image.WebP)
+    "webp": lambda (Image.Image data)
+	    {
+	      return Image.WebP.encode(data,
+				       (["preset":Image.WebP.PRESET_PHOTO,
+					 "quality":options->quality,
+					 "autofilter":1]));
+	    }
+#endif
+  ]);
+  return encoders;
+}
+
 /* Cut tiles for a Zoomify tileset.
 
    Returns the count of cut tiles.
@@ -298,25 +333,12 @@ int CutZoomifyTiles(string workspace,
   int inGroup = 0;  // Tiles in current group
   string currentPath; // Current working path.
 
-  mapping JPEG_OPTIONS = (["optimize":1,
-                           "quality":quality,
-                           "progressive":1]);
-
-  mapping encoders = ([
-    "jpeg": lambda (Image.Image data)
-	    {
-	      return Image.JPEG.encode(data,
-				       JPEG_OPTIONS);
-	    },
-    "PNG": lambda (Image.Image data)
-	   {
-	     return Image.PNG.encode(data);
-	   }
-  ]);
+  mapping encoders = get_encoders((["quality":quality]));
 
   mapping namePatterns = ([
     "jpeg": "%d-%d-%d.jpg",
-    "PNG": "%d-%d-%d.png"
+    "png": "%d-%d-%d.png",
+    "webp": "%d-%d-%d.webp"
   ]);
     
   void UpdateCurrentPath()
@@ -383,21 +405,12 @@ void CutDeepZoomTiles(string workspace,
                            "quality":quality,
                            "progressive":1]);
 
-  mapping encoders = ([
-    "jpeg": lambda (Image.Image data)
-	    {
-	      return Image.JPEG.encode(data,
-				       JPEG_OPTIONS);
-	    },
-    "PNG": lambda (Image.Image data)
-	   {
-	     return Image.PNG.encode(data);
-	   }
-  ]);
+  mapping encoders =  get_encoders((["quality":quality]));
 
   mapping namePatterns = ([
     "jpeg": "%d_%d.jpg",
-    "PNG": "%d_%d.png"
+    "png": "%d_%d.png",
+    "webp": "%d_%d.webp"
   ]);
   function encoder = encoders[format];
   string namePattern = namePatterns[format];
@@ -447,7 +460,8 @@ void DeepZoom(string output,
 {
   mapping extensions = ([
     "jpeg": "jpg",
-    "PNG": "png"
+    "PNG": "png",
+    "webp": "webp"
   ]);
   string tileDir = combine_path(output,sprintf("%s_files",name));
   mkdir(tileDir);

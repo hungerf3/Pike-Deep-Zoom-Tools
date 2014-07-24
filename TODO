@@ -1,6 +1,5 @@
 * Add internal scaling
 * Add packed output
-* Add WEBP output
 * Add support for Google Maps API
 * Add support for Google Earth tile sets
 * Support for user-defined mapping after scaling
