@@ -3,3 +3,4 @@
 * Add support for Google Maps API
 * Add support for Google Earth tile sets
 * Support for user-defined mapping after scaling
+* Support for 16 bit input
