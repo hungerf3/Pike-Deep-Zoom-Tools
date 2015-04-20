@@ -401,10 +401,6 @@ void CutDeepZoomTiles(string workspace,
 		      int tileSize,
 		      string format)
 {
-  mapping JPEG_OPTIONS = (["optimize":1,
-                           "quality":quality,
-                           "progressive":1]);
-
   mapping encoders =  get_encoders((["quality":quality]));
 
   mapping namePatterns = ([
