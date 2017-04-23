@@ -317,9 +317,10 @@ mapping get_encoders(mapping options)
 
    workspace: Path to a temporary workspace
    levels: number of levels in the image pyramid
-   quality: JPEG quality level for output tiles
+   quality: encoding quality level for output tiles (for JPEG)
    output: Path to which output is written
    tileSize: Size of one side of the square tiles
+   format: Format to use when writing tiles
 */
 int CutZoomifyTiles(string workspace,
 		    int levels,
@@ -390,9 +391,11 @@ int CutZoomifyTiles(string workspace,
 
    workspace: Path to a temporary workspace
    levels: number of levels in the image pyramid
-   quality: JPEG quality level for output tiles
+   quality: encoding quality level for output tiles (for JPEG)
    output: Path to which output is written
    tileSize: Size of one side of the square tiles
+   format: Format to use when writing tiles
+   
 */
 void CutDeepZoomTiles(string workspace,
                       int levels,
@@ -445,7 +448,8 @@ void CutDeepZoomTiles(string workspace,
   name: name of the image
   workspace: path used as a temporary workspace
   levels: number of levels in the image pyramid
-  quality: JPEG encoding quality for output tiles
+  quality: encoding quality for output tiles (for JPEG)
+  format: Format to use when writing tiles
  */
 void DeepZoom(string output,
 	      string name,
