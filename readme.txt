@@ -3,7 +3,7 @@ tilecutter.pike:
 Tilecutter is a tool for splitting a large source image
 into a Zoomify or Deep Zoom tileset.
 
-It was designed with a goal of having as few limits as to
+It was designed with a goal of having few limits as to
 the maximum size of the image that could be processed,
 and is less flexable than other tools that are restricted
 to images which can be loaded into memory.
@@ -14,7 +14,9 @@ NetPBM is used for scaling.
 merge.pike:
 ----------
 Merge is a tool for merging a set of images into a composite
-image.  Since Enblend is currently broken for large images,
+image.  I wrote it at a time when enblend/enfuse were broken
+for large  images.
+
 it is a quick and dirty replacement, using netPBM
 to do the heavy lifting.
 
