@@ -1,7 +1,8 @@
 * Add internal scaling
 * Add packed output
-* Add support for Google Maps API
+* Add support for Google Maps API tile sets
 * Add support for Google Earth tile sets
+* Add support for Pannellum tiles.
 * Support for user-defined mapping after scaling
-* Support for 32 bit input (not supported by PNM)
-* Support for external compressors (guetzli, etc)
+* Support for 32 bit input (PFM, not PNM)
+* Support for external compressors (guetzli, cavif, jpegxl)
