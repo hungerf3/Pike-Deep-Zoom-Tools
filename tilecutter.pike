@@ -25,6 +25,7 @@ mapping FLAG_ACCEPTABLE_VALUES =([
   >),
   "format":(<"jpeg",
 	     "png",
+       "pnm",
 #if constant(Image.WebP)
 	     "webp",
 #endif
@@ -101,15 +102,49 @@ string GenerateDeepZoomMetadata(int tile_size,
 }
 
 
-/* Verify the metadata for a PNM file, and return the size */
+/* Read the header from a PNM file, and return the size */
 array(int) GetPNMSize(string aFile)
 {
+   return GetSizeFromHeader(GetPNMHeader(aFile));
+}
+
+/* Get and verify the header from a PNM */
+array(string) GetPNMHeader(string aFile)
+{
   array(string) metadata = (Stdio.File(aFile)->read(2048)/"\n")[0..2];
-  if (metadata[0]=="P6")
-    return (array(int))(metadata[1]/" ");
-  else
-    throw (sprintf("%s does not appear to be a PNM file",
-                   aFile));
+  if ((<"P5", "P6">)[metadata[0]])
+    return metadata;
+    else
+      throw (sprintf("%s does not appear to be a Color or Grayscale PNM file",
+                     aFile));
+}
+
+/* Return the size from a PNM header */
+array(int) GetSizeFromHeader(array(string) metadata)
+{
+  return (array(int))(metadata[1]/" ");
+}
+
+/* Get the maximum color value from a PNM header*/
+int getMaxvalFromHeader(array(string) metadata)
+{
+  return (int)(metadata[2]);
+}
+
+/* Get the version from a PNM header*/
+int getVersionFromHeader(array(string) metadata)
+{
+  return (int)(metadata[0][1..]);
+}
+
+/* Get the BPP count for a PNM Header*/
+int GetBPPFromHeader(array(string) metadata)
+{
+  int bytes = (["P5": 1,
+                "P6": 3])[metadata[0]];
+  if (getMaxvalFromHeader(metadata)> 255)
+    bytes = bytes * 2;
+  return bytes;
 }
 
 
@@ -123,22 +158,24 @@ string GetTemporaryFilename(string workspace,
 
 
 /* Load a region from a PNM file
+
+  Returns a string containing PNM data for the region.
    
    file: the PNM file from which to load the region
    offset: An array of int holding the starting offset in pixels
    size: An array of int holding the size to load
  */
-Image.Image LoadPNMRegion(string file,
+string LoadPNMRegion(string file,
                           array(int) offset,
                           array(int) size)
 {
 
   // Generate a basic PNM header for a given region size.
   // Used to decode a block of PNM data.
-  string GeneratePNMMetadata(array(int) size)
+  string GeneratePNMMetadata(array(int) size, int version, int maxval)
   {
-    return sprintf("P6\n%d %d\n255\n",
-                   size[0], size[1]);
+    return sprintf("P%d\n%d %d\n%d\n",
+                   version, size[0], size[1], maxval);
   };
 
   // Find the end of the header data in a PNM file
@@ -150,8 +187,11 @@ Image.Image LoadPNMRegion(string file,
       offset = search(metadata,"\n",offset)+1;
     return offset;
   };
-
-  array(int) imageSize = GetPNMSize(file);
+  array(string) header = GetPNMHeader(file);
+  array(int) imageSize = GetSizeFromHeader(header);
+  int imageMaxval = getMaxvalFromHeader(header);
+  int imageSamples = GetBPPFromHeader(header);
+  int imageVersion = getVersionFromHeader(header);
 
   // Make local copies so we can modify them.
   array(int) local_offset = copy_value(offset);
@@ -169,7 +209,9 @@ Image.Image LoadPNMRegion(string file,
   // Extract the image data from the massive PNM file.
   String.Buffer buffer = String.Buffer();
   
-  buffer->add(GeneratePNMMetadata(local_size));
+  buffer->add(GeneratePNMMetadata(local_size,
+                                  imageVersion,
+                                  imageMaxval));
   // Use an unbuffered file.
   Stdio.File input = Stdio.File(file);
 
@@ -178,22 +220,22 @@ Image.Image LoadPNMRegion(string file,
 
   // Seek to the beginning of the block
   input->seek(input->tell()+ // Current position
-              3*(local_offset[1]*imageSize[0])+ // Whole lines
-              3*lineStartOffset); // Partial line
+              imageSamples*(local_offset[1]*imageSize[0])+ // Whole lines
+              imageSamples*lineStartOffset); // Partial line
 
   // Read the block
   for (int x=0 ; x < local_size[1]; x++)
     {
       // Read the current line
-      buffer->add(input->read(3*local_size[0]));
+      buffer->add(input->read(imageSamples*local_size[0]));
       // Skip to the next line
       input->seek(input->tell()+ // Current position
-                  3*lineEndOffset+ // end of the line
-                  3*lineStartOffset); // start of the next
+                  imageSamples*lineEndOffset+ // end of the line
+                  imageSamples*lineStartOffset); // start of the next
     }
 
-  // decode and return the image 
-  return Image.PNM.decode(buffer->get());
+  
+  return buffer->get();
 }
 
 
@@ -287,24 +329,28 @@ int PrepareScaledInputFiles(string source, string workspace, int limit)
 mapping get_encoders(mapping options)
 {
   mapping encoders = ([
-    "jpeg": lambda (Image.Image data)
+    "jpeg": lambda (string data)
 	    {
-	      return Image.JPEG.encode(data,
+	      return Image.JPEG.encode(Image.PNM.decode(data),
 				       (["optimize":1,
-					 "quality":options->quality,
-					 "progressive":1]));
+					      "quality":options->quality,
+					      "progressive":1]));
 	    },
-    "png": lambda (Image.Image data)
+    "png": lambda (string data)
 	   {
-	     return Image.PNG.encode(data);
+	     return Image.PNG.encode(Image.PNM.decode(data));
 	   },
+     "pnm": lambda (string data)
+     {
+        return data;
+     },
 #if constant(Image.WebP)
-    "webp": lambda (Image.Image data)
+    "webp": lambda (string data)
 	    {
-	      return Image.WebP.encode(data,
+	      return Image.WebP.encode(Image.PNM.decode(data),
 				       (["preset":Image.WebP.PRESET_PHOTO,
-					 "quality":options->quality,
-					 "autofilter":1]));
+					      "quality":options->quality,
+					      "autofilter":1]));
 	    }
 #endif
   ]);
@@ -339,7 +385,8 @@ int CutZoomifyTiles(string workspace,
   mapping namePatterns = ([
     "jpeg": "%d-%d-%d.jpg",
     "png": "%d-%d-%d.png",
-    "webp": "%d-%d-%d.webp"
+    "webp": "%d-%d-%d.webp",
+     "pnm": "%d-%d-%d.pnm"
   ]);
     
   void UpdateCurrentPath()
@@ -409,7 +456,8 @@ void CutDeepZoomTiles(string workspace,
   mapping namePatterns = ([
     "jpeg": "%d_%d.jpg",
     "png": "%d_%d.png",
-    "webp": "%d_%d.webp"
+    "webp": "%d_%d.webp",
+    "pnm": "%d_%d.pnm"
   ]);
   function encoder = encoders[format];
   string namePattern = namePatterns[format];
@@ -461,7 +509,8 @@ void DeepZoom(string output,
   mapping extensions = ([
     "jpeg": "jpg",
     "PNG": "png",
-    "webp": "webp"
+    "webp": "webp",
+    "pnm": "pnm"
   ]);
   string tileDir = combine_path(output,sprintf("%s_files",name));
   mkdir(tileDir);
