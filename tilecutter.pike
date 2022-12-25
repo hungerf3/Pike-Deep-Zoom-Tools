@@ -597,7 +597,7 @@ void check_flags(mapping FLAGS)
 void help()
 {
   Stdio.stdout.write("Usage: tilecutter.pike [flags] <input> <outputdir> <outputname>\n");
-  foreach(indices(FLAG_HELP), string aFlag)
+  foreach(sort(indices(FLAG_HELP)), string aFlag)
     {
       string acceptable_flags = "";
       if (FLAG_ACCEPTABLE_VALUES[aFlag])
