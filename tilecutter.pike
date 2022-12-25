@@ -15,6 +15,7 @@ mapping FLAG_DEFAULTS = ([
   "type":"DeepZoom",
   "workspace": getenv("TMP") ? getenv("TMP") : "/var/tmp",
   "verbose":0,
+  "tilesize": 256
 ]);
 
 // Acceptable values for command line flags
@@ -40,6 +41,7 @@ mapping FLAG_HELP = ([
   "workspace":"Directory to use for temporary files.",
   "help":"Display help.",
   "verbose":"Display more information.",
+  "tilesize":"Maximum size of each tile."
 ]);
 
 mapping FLAGS = ([]);
@@ -448,8 +450,8 @@ void CutDeepZoomTiles(string workspace,
                       int levels,
                       int quality,
                       string output,
-		      int tileSize,
-		      string format)
+		                  int tileSize,
+		                  string format)
 {
   mapping encoders =  get_encoders((["quality":quality]));
 
@@ -504,7 +506,8 @@ void DeepZoom(string output,
 	      string workspace,
 	      int levels,
 	      int quality,
-	      string format)
+	      string format,
+        int tileSize)
 {
   mapping extensions = ([
     "jpeg": "jpg",
@@ -521,14 +524,14 @@ void DeepZoom(string output,
 			  sprintf("%s.dzi",
 				  name)),
 	     "wct")
-    ->write(GenerateDeepZoomMetadata(256,0,extensions[format],
+    ->write(GenerateDeepZoomMetadata(tileSize,0,extensions[format],
 				     imageSize[0],
 				     imageSize[1]));
   CutDeepZoomTiles(workspace,
 		   levels,
 		   quality,
 		   tileDir,
-		   256,
+		   tileSize,
 		   format);
 }
 
@@ -546,7 +549,8 @@ void Zoomify(string output,
 	     string workspace,
 	     int levels,
 	     int quality,
-	     string format)
+	     string format,
+       int tileSize)
 {
 
   string tileDir = combine_path(output,name);
@@ -556,14 +560,14 @@ void Zoomify(string output,
 
   Stdio.File(combine_path(tileDir,"ImageProperties.xml"),
 	     "wct")
-    ->write(GenerateZoomifyMetadata(256,
+    ->write(GenerateZoomifyMetadata(tileSize,
 				    imageSize[0],
 				    imageSize[1],
 				    CutZoomifyTiles(workspace,
 						    levels,
 						    quality,
 						    tileDir,
-						    256,
+						    tileSize,
 						    "jpeg")));
 						    
 }
@@ -608,7 +612,7 @@ void help()
 }
 
 
-// Main
+// Main 
 int main(int argc, array(string) argv)
 {
   FLAGS = FLAG_DEFAULTS|Arg.parse(argv);
@@ -625,6 +629,7 @@ int main(int argc, array(string) argv)
   string OUTPUT = combine_path(getcwd(),
 			       FLAGS[Arg.REST][1]);
   string NAME = FLAGS[Arg.REST][2];
+  int    tileSize = (int)(FLAGS["tilesize"]);
   string WORKSPACE = combine_path(getcwd(),
 				  FLAGS["workspace"],
 				  String.string2hex(Crypto.Random.random_string(10)));
@@ -637,14 +642,16 @@ int main(int argc, array(string) argv)
 				     WORKSPACE,
 				     1),
 	     (int)FLAGS["quality"],
-	     FLAGS["format"]);
+	     FLAGS["format"],
+       tileSize);
   if ((<"Zoomify">)[FLAGS["type"]])
     Zoomify(OUTPUT,
 	    NAME, WORKSPACE,
 	    PrepareScaledInputFiles(INPUT,
 				    WORKSPACE,
-				    256),
+				    tileSize),
 	    (int)FLAGS["quality"],
-	    "jpeg");
+	    "jpeg",
+      tileSize);
   rm(WORKSPACE);
 }
