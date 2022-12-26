@@ -36,7 +36,7 @@ mapping FLAG_ACCEPTABLE_VALUES =([
 // Documentation for command line flags
 mapping FLAG_HELP = ([
   "format": "Format to use for output tiles.",
-  "quality":"Quality to use for Jpeg encoding.",
+  "quality":"Quality to use for Jpeg / webp encoding.",
   "type":"Type of tile data to produce",
   "workspace":"Directory to use for temporary files.",
   "help":"Display help.",
@@ -577,10 +577,26 @@ void Zoomify(string output,
 void check_flags(mapping FLAGS)
 {
   // Preflight
+  // Check for all needed fields
+  if (sizeof(FLAGS[Arg.REST])!=3)
+  {
+    FLAGS["help"]=1;
+    return;
+  }
+
   if (FLAGS["type"] == "Zoomify")
-    {
+    {  // Zoomify is an old format, and only supports jpeg
       FLAG_ACCEPTABLE_VALUES["format"]=(<"jpeg">);
     }
+
+  if (((int)(FLAGS["tilesize"])) < 1)
+  { 
+    Stdio.stderr.write(sprintf("Invalid value %s provided for %s.\nAcceptable values are: %s\n",
+				                        FLAGS["tilesize"], "tilesize",
+                                "greater than zero"));
+    FLAGS["help"]=1;
+    return;
+  }
 
   foreach(indices(FLAGS), mixed aFlag)
     if (has_index(FLAG_ACCEPTABLE_VALUES,aFlag))
@@ -618,7 +634,7 @@ int main(int argc, array(string) argv)
   FLAGS = FLAG_DEFAULTS|Arg.parse(argv);
   check_flags(FLAGS);
 
-  if ( FLAGS["help"]==1 | sizeof(FLAGS[Arg.REST])!=3)
+  if ( FLAGS["help"]==1)
     {
       help();
       exit(1);
