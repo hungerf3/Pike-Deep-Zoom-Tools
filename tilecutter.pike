@@ -1,6 +1,6 @@
 #!/usr/local/bin/pike
 /*  Tilecutter.pike
-    Copyright 2011-2022 by Jeff Hungerford <hungerf3@house.ofdoom.com>
+    Copyright 2011-2023 by Jeff Hungerford <hungerf3@house.ofdoom.com>
     
     This program takes a PNM format image, and splits it into a set
     of tiles usable with "deep zoom" based viewers, such as Seadragon.
@@ -43,6 +43,11 @@ mapping FLAG_HELP = ([
   "help":"Display help.",
   "verbose":"Display more information.",
   "tilesize":"Maximum size of each tile."
+]);
+
+mapping TYPE_HELP = ([
+  "Pannellum": "Input is a comma seperated list of (possibly null) cube face PNM files. Front,right,back,left,up,down.",
+  "Zoomify": "This is an old format, and only supports JPEG files."
 ]);
 
 mapping FLAGS = ([]);
@@ -758,6 +763,7 @@ void check_flags(mapping FLAGS)
 void help()
 {
   Stdio.stdout.write("Usage: tilecutter.pike [flags] <input> <outputdir> <outputname>\n");
+  Stdio.stdout.write("Flag Help:\n");
   foreach(sort(indices(FLAG_HELP)), string aFlag)
     {
       string acceptable_flags = "";
@@ -770,6 +776,11 @@ void help()
 				 (string)FLAG_DEFAULTS[aFlag],
 				 acceptable_flags));
     }
+Stdio.stdout.write("Tile Type Notes:\n");
+foreach(sort(indices(TYPE_HELP)), string aType)
+{
+  Stdio.stdout.write(sprintf("%s: %s\n", aType, TYPE_HELP[aType]));
+}
 }
 
 
