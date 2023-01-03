@@ -22,7 +22,8 @@ mapping FLAG_DEFAULTS = ([
 mapping FLAG_ACCEPTABLE_VALUES =([
   "type":(<"DeepZoom",
 	   "SeaDragon",
-	   "Zoomify"
+	   "Zoomify",
+     "Pannellum"
   >),
   "format":(<"jpeg",
 	     "png",
@@ -383,13 +384,6 @@ int CutZoomifyTiles(string workspace,
   string currentPath; // Current working path.
 
   mapping encoders = get_encoders((["quality":quality]));
-
-  mapping namePatterns = ([
-    "jpeg": "%d-%d-%d.jpg",
-    "png": "%d-%d-%d.png",
-    "webp": "%d-%d-%d.webp",
-     "pnm": "%d-%d-%d.pnm"
-  ]);
     
   void UpdateCurrentPath()
   {
@@ -400,8 +394,15 @@ int CutZoomifyTiles(string workspace,
     mkdir(currentPath);
   };
 
+ mapping extensions = ([
+    "jpeg": "jpg",
+    "PNG": "png",
+    "webp": "webp",
+    "pnm": "pnm"
+  ]);
+
   function encoder = encoders[format];
-  string namePattern = namePatterns[format];
+  string namePattern = "%d-%d-%d." + extensions[format];
 
   mkdir(output);
   UpdateCurrentPath();
@@ -444,6 +445,9 @@ int CutZoomifyTiles(string workspace,
    output: Path to which output is written
    tileSize: Size of one side of the square tiles
    format: Format to use when writing tiles
+   pattern: Optional naming pattern to use for tiles
+   base: Optional lowest value for a tile set
+   orient: Optional 0=ltr 1=ttb
    
 */
 void CutDeepZoomTiles(string workspace,
@@ -451,25 +455,42 @@ void CutDeepZoomTiles(string workspace,
                       int quality,
                       string output,
 		                  int tileSize,
-		                  string format)
+		                  string format,
+                      string|void pattern,
+                      int|void base,
+                      int|void orient)
 {
   mapping encoders =  get_encoders((["quality":quality]));
 
-  mapping namePatterns = ([
-    "jpeg": "%d_%d.jpg",
-    "png": "%d_%d.png",
-    "webp": "%d_%d.webp",
-    "pnm": "%d_%d.pnm"
+ mapping extensions = ([
+    "jpeg": "jpg",
+    "PNG": "png",
+    "webp": "webp",
+    "pnm": "pnm"
   ]);
-  function encoder = encoders[format];
-  string namePattern = namePatterns[format];
 
+  function encoder = encoders[format];
+  string namePattern = "%d_%d";
+  int theBase = 0;
+  int theOrientation = 0;
+
+  if (!zero_type(orient))
+    theOrientation = orient;
+  
+  if (!zero_type(base))
+    theBase = base;
+
+  if (!zero_type(pattern))
+  {
+    namePattern = pattern;
+  }
+   namePattern = namePattern + "." + extensions[format];
 
   for (int level = 0; level <= levels ; level ++)
     {
       string currentFile = GetTemporaryFilename(workspace,
 						level);
-      string currentPath = combine_path(output,(string)(levels-level));
+      string currentPath = combine_path(output,(string)(levels-level+theBase));
       mkdir(currentPath);
       array(int) imageSize = GetPNMSize(currentFile);
       if (FLAGS["verbose"])
@@ -477,14 +498,26 @@ void CutDeepZoomTiles(string workspace,
 				   level,
 				   imageSize[0],
 				   imageSize[1]));
+      int xi;
+      int yi;
       array(int) tiles = (array(int))(ceil((imageSize[*]/((float)tileSize))[*]));
       for (int x = 0 ; x < tiles[0] ; x++)
 	for (int y = 0 ; y < tiles[1] ; y++)
+  {
+    if (theOrientation == 1)
+    {
+      xi=y; yi=x;
+    }
+    else
+    {
+      xi=x; yi=y;
+    }
 	  Stdio.File(combine_path(currentPath,sprintf(namePattern,
-						      x, y)),
+						      xi, yi)),
 		     "wct")->write(encoder(LoadPNMRegion(currentFile,
 							 ({tileSize*x, tileSize*y}),
 							 ({tileSize,tileSize}))));
+  }
       // Clean up the tile data
       rm (currentFile);
     }
@@ -572,6 +605,118 @@ void Zoomify(string output,
 						    
 }
 
+/*
+  Prepare a Pannellum cubic multi resolution tile set.
+
+  This is is more complex than other formats, as we need to generate
+  tile sets for each cube face.
+
+*/
+
+string GeneratePanellumMetadata(int tileSize,
+                                int cubeSize,
+                                int levels,
+                                string format)
+{
+  return Standards.JSON.encode (([   "type": "multires",
+    "autoLoad": Val.True(),
+    "multiRes": ([
+      "path": "%l/%s%y_%x",
+      "fallbackPath": "fallback/%s",
+      "extension": format,
+      "maxLevel": levels,
+      "cubeResolution": cubeSize,
+      "tileResolution": tileSize
+    ])
+  ]),
+  Standards.JSON.HUMAN_READABLE |
+  Standards.JSON.PIKE_CANONICAL);
+}
+
+
+void Pannellum(string output,
+               string name,
+               string workspace,
+               string format,
+               int quality,
+               int tilesize,
+               string input)
+{
+  string namePattern = "%d_%d";
+  // Match the face order from Erect2cubic
+  array(string) directions = ({"f", "r", "b", "l", "u", "d"});
+  array(string) inputs;
+
+    mapping extensions = ([
+    "jpeg": "jpg",
+    "PNG": "png",
+    "webp": "webp",
+    "pnm": "pnm"
+  ]);
+
+  if (!has_value(input, ","))
+  {
+    Stdio.stderr.write("Currently Panellum format requires a set of cube faces, rather than a single image.");
+    return;
+  }
+
+  inputs = input/",";
+  if (sizeof(inputs)!=6)
+  {
+    Stdio.stderr.write("Panellum format requres 6 cube faces, seperated by commas");
+  }
+
+  string tileDir = combine_path(output,name);
+  mkdir(tileDir);
+  mkdir(combine_path(tileDir,"fallback"));
+
+  int current_direction = 0;
+  int face_size;
+  int levels;
+  foreach(inputs, string anInput)
+  {
+    if (sizeof(anInput)!=0)
+    {
+      // Start the generation of the fallback image for this cube face
+      object fallbackGenerator = Process.spawn("pamscale -filter sinc -xysize" + 
+                                               sprintf(" %d %d ", tilesize*2, tilesize*2)+
+                                               " < " + combine_path(getcwd(), anInput) + 
+                                               " > " + combine_path(workspace, "fallback.pnm"));
+
+      // Generate the scaled images
+      levels = PrepareScaledInputFiles(combine_path(getcwd(),anInput),
+                                           workspace,
+                                           tilesize);
+      face_size = GetPNMSize(combine_path(workspace,"0.pnm"))[0];
+      CutDeepZoomTiles(workspace,
+                      levels,
+                      quality,
+                      tileDir,
+                      tilesize,
+                      format,
+                      directions[current_direction]+namePattern,
+                      1, 1);
+      // Convert the fallback image to the required format
+      fallbackGenerator->wait(); // make sure the fallback image has generated
+      Stdio.File(combine_path(tileDir,
+                              "fallback",
+                              directions[current_direction]+"."+extensions[format]),
+                  "wct")->write(get_encoders(([
+                                  "quality":quality
+                                  ]))[format](Stdio.File(combine_path(workspace,
+                                                                      "fallback.pnm"))->read()));
+      rm(combine_path(workspace,"fallback.pnm"));
+    }
+    current_direction++;
+  }
+  // generate the metadata for the tile set
+  Stdio.File(combine_path(tileDir,
+                          "config.json"),
+            "wct")->write(GeneratePanellumMetadata(tilesize,
+                                                   face_size,
+                                                   levels+1,
+                                                   extensions[format]));
+}
 
 // check command lime flags
 void check_flags(mapping FLAGS)
@@ -669,5 +814,13 @@ int main(int argc, array(string) argv)
 	    (int)FLAGS["quality"],
 	    "jpeg",
       tileSize);
+  if ((<"Pannellum">)[FLAGS["type"]])
+    Pannellum(OUTPUT,
+              NAME,
+              WORKSPACE,
+              FLAGS["format"],
+              (int)(FLAGS["quality"]),
+              tileSize,
+              INPUT);
   rm(WORKSPACE);
 }
